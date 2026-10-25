@@ -169,6 +169,8 @@ struct WelcomeSheet: View {
             Button("") { NSApp.terminate(nil) }
                 .keyboardShortcut("q", modifiers: [.command])
                 .opacity(0)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
         }
         .onAppear {
             withAnimation(AppTheme.Animation.springGentle.delay(0.1)) { showIcon = true }

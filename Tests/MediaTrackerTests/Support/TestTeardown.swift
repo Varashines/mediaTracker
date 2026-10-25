@@ -46,8 +46,31 @@ class MTTestCase: XCTestCase {
                     BadgeEngine.clearScanCache()
                 }
             }
+            MTTestCase.resetSharedTestState()
         }
         method_setImplementation(method, imp_implementationWithBlock(hook))
+    }
+
+    /// Clears process-wide state a suite may have left behind.
+    ///
+    /// XCTest runs every suite in a single process, so a suite that configures cloud
+    /// sync leaves an endpoint, keys and a pull watermark behind — and the next suite's
+    /// conflict decisions change. That is why the full suite used to fail on tests that
+    /// pass in isolation (`CloudSyncScenarioTests` was the visible victim). Suites are
+    /// supposed to clean up after themselves, but a central reset is the only thing that
+    /// holds when a new suite forgets.
+    private static func resetSharedTestState() {
+        CloudSyncService.session = .shared
+        MockURLProtocol.requestHandler = nil
+        for key in [
+            UserDefaultsKeys.cloudSyncURL.rawValue,
+            UserDefaultsKeys.cloudSyncAnonKey.rawValue,
+            UserDefaultsKeys.cloudSyncKey.rawValue,
+            UserDefaultsKeys.cloudSyncWatermark.rawValue,
+            UserDefaultsKeys.cloudSyncLastTimestamp.rawValue
+        ] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
 
     private nonisolated(unsafe) static var didInstall = false

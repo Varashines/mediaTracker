@@ -1,7 +1,25 @@
 #!/bin/bash
 
-# Point to Xcode-beta for SwiftData macro support
-export DEVELOPER_DIR="/Applications/Xcode-beta.app/Contents/Developer"
+# A full Xcode is required: the SwiftData macro plugin that expands `@Model` ships only
+# with Xcode, so Command Line Tools alone cannot compile this project.
+#
+# Prefer whatever Xcode is installed (Xcode-beta first, since the project was developed
+# against it), and only override DEVELOPER_DIR when one of them actually exists. The old
+# unconditional `export DEVELOPER_DIR=/Applications/Xcode-beta.app/...` broke the
+# documented install path on every machine that had a different Xcode.
+if [ -z "${DEVELOPER_DIR:-}" ]; then
+    for candidate in /Applications/Xcode-beta.app /Applications/Xcode.app; do
+        if [ -d "$candidate/Contents/Developer" ]; then
+            export DEVELOPER_DIR="$candidate/Contents/Developer"
+            break
+        fi
+    done
+fi
+if ! xcrun --find swift >/dev/null 2>&1; then
+    echo "❌ No usable Xcode toolchain found." >&2
+    echo "   Install Xcode (not just Command Line Tools) and run ./install.sh again." >&2
+    exit 1
+fi
 
 # Configuration
 APP_NAME="MediaTracker"

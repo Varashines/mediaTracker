@@ -11,15 +11,8 @@ struct MediaTrackerApp: App {
     @AppStorage("theme_preference") private var themePreference: Int = 0
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self,
-            TVSeason.self, TVEpisode.self, CastMember.self, SeasonCastMember.self,
-            NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
-            BadgeEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self,
-            WatchCycle.self, WatchEvent.self
-        ])
+        // Declared once in SchemaV1 so the version chain and the live schema cannot drift.
+        let schema = Schema.current
 
         let modelConfiguration: ModelConfiguration
         do {
@@ -49,35 +42,30 @@ struct MediaTrackerApp: App {
             var compatibleBackup: URL?
             for backup in candidates {
                 let versionURL = backup.deletingPathExtension().appendingPathExtension("version")
-                let backupVersion = (try? String(contentsOf: versionURL, encoding: .utf8)).flatMap {
-                    // Backups from same major version are compatible
-                    let backupMajor = $0.split(separator: ".").first ?? ""
-                    let currentMajor = currentVersion.split(separator: ".").first ?? ""
-                    return backupMajor == currentMajor ? $0 : nil
-                }
-                if backupVersion != nil {
+                guard let recordedVersion = try? String(contentsOf: versionURL, encoding: .utf8) else { continue }
+                if StoreLocation.isCompatibleBackupVersion(recordedVersion, currentVersion: currentVersion) {
                     compatibleBackup = backup
                     break
                 }
             }
             if let backupURL = compatibleBackup {
                 AppLogger.info("Found compatible backup: \(backupURL.lastPathComponent). Restoring...")
-                let savedCurrent = storeDir.appendingPathComponent("default_current_saved.store")
-                try? FileManager.default.removeItem(at: savedCurrent)
-                try? FileManager.default.copyItem(at: storeURL, to: savedCurrent)
-                try? FileManager.default.removeItem(at: storeURL)
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
-                try? FileManager.default.copyItem(at: backupURL, to: storeURL)
-                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+                // Latch only once a restore actually happened. The flag used to be set
+                // unconditionally — including on the launch that *creates* the first
+                // backup, when none exists yet — which permanently disabled the retry.
+                if StoreLocation.restoreBackup(at: backupURL, over: storeURL) {
+                    UserDefaults.standard.set(true, forKey: didRestoreKey)
+                    AppLogger.info("✅ Restored library from \(backupURL.lastPathComponent)")
+                } else {
+                    AppLogger.error("❌ Backup found but could not be restored: \(backupURL.lastPathComponent)")
+                }
             }
-            UserDefaults.standard.set(true, forKey: didRestoreKey)
         }
 
         do {
             return try ModelContainer(
                 for: schema,
+                migrationPlan: MediaTrackerMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -91,7 +79,11 @@ struct MediaTrackerApp: App {
             AppLogger.error("CRITICAL: SwiftData migration failed — backing up store before recovery: \(firstError)")
 
             let storeURL = modelConfiguration.url
-            let appVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)?.replacingOccurrences(of: ".", with: "_") ?? "unknown"
+            let rawVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "unknown"
+            // The file name uses underscores so the discovery filter can recognise it; the
+            // sidecar records the plain dotted version so the compatibility check compares
+            // like with like ("10.1.0" against "10.1.0").
+            let appVersion = rawVersion.replacingOccurrences(of: ".", with: "_")
             let timestamp = Int(Date().timeIntervalSince1970)
             let backupName = "default_corrupted_v\(appVersion)_\(timestamp).store"
             let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
@@ -103,7 +95,7 @@ struct MediaTrackerApp: App {
             var backupSucceeded = true
             do {
                 try "Migration error: \(firstError)".write(to: logURL, atomically: true, encoding: .utf8)
-                try appVersion.write(to: versionURL, atomically: true, encoding: .utf8)
+                try rawVersion.write(to: versionURL, atomically: true, encoding: .utf8)
                 try FileManager.default.copyItem(at: storeURL, to: backupURL)
             } catch {
                 backupSucceeded = false
@@ -111,18 +103,21 @@ struct MediaTrackerApp: App {
                 AppLogger.error("📦 Failed to back up corrupted store: \(error)")
             }
             if backupSucceeded {
-                let wal = storeURL.appendingPathExtension("wal")
-                let shm = storeURL.appendingPathExtension("shm")
-                try? FileManager.default.copyItem(at: wal, to: backupURL.appendingPathExtension("wal"))
-                try? FileManager.default.copyItem(at: shm, to: backupURL.appendingPathExtension("shm"))
+                for (source, destination) in zip(
+                    StoreLocation.sidecarURLs(for: storeURL),
+                    StoreLocation.sidecarURLs(for: backupURL)
+                ) where FileManager.default.fileExists(atPath: source.path) {
+                    try? FileManager.default.copyItem(at: source, to: destination)
+                }
                 AppLogger.error("📦 Corrupted store backed up to: \(backupURL.path)")
             }
 
             // 2. Only delete if backup succeeded; otherwise bail to fatalError with context.
             if backupSucceeded {
                 try? FileManager.default.removeItem(at: storeURL)
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("wal"))
-                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension("shm"))
+                for sidecar in StoreLocation.sidecarURLs(for: storeURL) {
+                    try? FileManager.default.removeItem(at: sidecar)
+                }
             } else {
                 try? "store recovery aborted: backup failed; refusing to delete original store".write(
                     to: logURL, atomically: true, encoding: .utf8
@@ -139,14 +134,20 @@ struct MediaTrackerApp: App {
                     AppLogger.info("Attempting to validate backup store...")
                     let _ = try ModelContainer(
                         for: schema,
+                        migrationPlan: MediaTrackerMigrationPlan.self,
                         configurations: [backupConfig]
                     )
                     AppLogger.info("Backup validated. Restoring from backup...")
                     try FileManager.default.copyItem(at: backupURL, to: storeURL)
-                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("wal"), to: storeURL.appendingPathExtension("wal"))
-                    try? FileManager.default.copyItem(at: backupURL.appendingPathExtension("shm"), to: storeURL.appendingPathExtension("shm"))
+                    for (source, destination) in zip(
+                        StoreLocation.sidecarURLs(for: backupURL),
+                        StoreLocation.sidecarURLs(for: storeURL)
+                    ) where FileManager.default.fileExists(atPath: source.path) {
+                        try? FileManager.default.copyItem(at: source, to: destination)
+                    }
                     let container = try ModelContainer(
                         for: schema,
+                        migrationPlan: MediaTrackerMigrationPlan.self,
                         configurations: [modelConfiguration]
                     )
                     AppLogger.info("Database restored from backup.")
@@ -161,6 +162,7 @@ struct MediaTrackerApp: App {
                 AppLogger.info("Creating fresh ModelContainer...")
                 let container = try ModelContainer(
                     for: schema,
+                    migrationPlan: MediaTrackerMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
                 if !restoredFromBackup {
@@ -235,6 +237,11 @@ struct MediaTrackerApp: App {
                 .environment(\.sleepManager, SleepManager.shared)
                 .sleepModeSupport()
                 .blur(radius: lockService.isLocked ? 6 : 0)
+                // Blurring hides the library but leaves every keyboard shortcut live
+                // (⌘F, ⌘1…7, space, w), so a locked app could still be driven. This is
+                // what actually stops interaction.
+                .disabled(lockService.isLocked)
+                .allowsHitTesting(!lockService.isLocked)
 
             if lockService.isLocked {
                 LockScreenView()
@@ -256,7 +263,13 @@ struct MediaTrackerApp: App {
         .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .background || newValue == .inactive {
-                if newValue == .background { ImageCache.shared.clearMemoryCache() }
+                if newValue == .background {
+                    ImageCache.shared.clearMemoryCache()
+                    // Persist anything still inside SaveCoordinator's debounce window.
+                    // Autosave is off, so backgrounding is the last chance before the
+                    // process can be suspended or killed.
+                    SaveCoordinator.shared.flushAll()
+                }
                 lockService.lock()
             } else if newValue == .active {
                 Task {
@@ -264,6 +277,12 @@ struct MediaTrackerApp: App {
                     await BackgroundTaskManager.shared.refreshStalePremiereBadges()
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            // ⌘Q: the debounce window would otherwise swallow whatever the user did in
+            // the last 350 ms. willTerminate is synchronous, so the save completes before
+            // the process exits.
+            SaveCoordinator.shared.flushAll()
         }
         .onContinueUserActivity("com.vara.MediaTracker.viewItem") { activity in
             guard let id = activity.userInfo?["id"] as? String else { return }
@@ -273,15 +292,26 @@ struct MediaTrackerApp: App {
 
     @ViewBuilder
     private var settingsContent: some View {
-        SettingsView()
-            .modelContainer(sharedModelContainer)
-            .preferredColorScheme(mappedScheme)
-            .tint(AppTheme.Colors.accent)
-            .onAppear {
-                updateSystemColorScheme()
-                applyTheme(themePreference)
-            }
-            .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+        // Settings is a separate window, so the lock overlay in `appMainContent` never
+        // covered it. ⌘, on a locked app opened a window that could switch the lock off
+        // without authentication, edit the API keys, and display the Supabase sync key in
+        // cleartext with a copy button. Gate the scene itself; LockScreenView can unlock
+        // from here.
+        if lockService.isLocked {
+            LockScreenView()
+                .modelContainer(sharedModelContainer)
+                .preferredColorScheme(mappedScheme)
+        } else {
+            SettingsView()
+                .modelContainer(sharedModelContainer)
+                .preferredColorScheme(mappedScheme)
+                .tint(AppTheme.Colors.accent)
+                .onAppear {
+                    updateSystemColorScheme()
+                    applyTheme(themePreference)
+                }
+                .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+        }
     }
 
     private var mappedScheme: ColorScheme? {

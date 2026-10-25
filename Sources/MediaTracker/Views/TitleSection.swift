@@ -121,6 +121,7 @@ struct TitleSection: View {
                                         .shadow(color: .black.opacity(showLogoPicker ? 0.25 : 0.15), radius: showLogoPicker ? 4 : 3, x: 0, y: showLogoPicker ? 3 : 2)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Choose image")
                                 .contentShape(Rectangle())
                                 .help(isLoadingLogoOptions ? "Loading logo options" : "Change logo")
                             .opacity((isLogosHovering || showLogoPicker) ? 1 : 0)

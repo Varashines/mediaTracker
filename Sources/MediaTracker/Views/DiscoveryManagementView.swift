@@ -89,6 +89,8 @@ struct DiscoveryManagementView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Show \(name) in Discover again")
+                                .contentShape(Rectangle())
                             }
                         }
                     }

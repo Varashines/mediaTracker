@@ -213,7 +213,7 @@ final class TVShowDetails {
         return earliest
     }
 
-    func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false) {
+    func recalculateCachedProperties(triggerSync: Bool = true, force: Bool = false, userEditedWatchState: Bool = false) {
         _ = calculateProgress(forceRecalculate: force)
         // Invalidate badge scan cache when episodes change — this is the correct
         // place since episode state is what makes the scan stale.
@@ -222,7 +222,7 @@ final class TVShowDetails {
         }
         if triggerSync {
             // Pass force: false to avoid redundant full scan — denormalized counts are already updated by calculateProgress
-            item?.syncCachedProperties(dirty: [.progress, .badge])
+            item?.syncCachedProperties(dirty: [.progress, .badge], userEditedWatchState: userEditedWatchState)
         }
     }
 

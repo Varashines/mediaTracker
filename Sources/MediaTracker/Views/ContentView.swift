@@ -785,6 +785,11 @@ private struct GlobalKeyboardShortcuts: View {
             }.keyboardShortcut(.escape, modifiers: [])
         }
         .opacity(0)
+        // Invisible shortcut vehicles: keep them out of the accessibility tree and out of
+        // the hit-test path. `.opacity(0)` alone leaves both, so VoiceOver announced a run
+        // of unlabeled buttons and Full Keyboard Access focused invisible controls.
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
     }
 }
 

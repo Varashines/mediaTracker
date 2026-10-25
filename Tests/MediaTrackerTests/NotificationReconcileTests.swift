@@ -119,4 +119,28 @@ final class NotificationReconcileTests: MTTestCase {
         let result = Set(stale(queue, upcoming: upcoming))
         XCTAssertEqual(result, ["tv-tv_999999", "movie-movie_555555", "tv-tv_97546-day2"])
     }
+
+    /// Switching a channel off used to filter only *new* scheduling, so pings already in the
+    /// system queue kept firing after the user turned that channel off.
+    func testDisabledChannelMarksItsQueuedRequestsStale() {
+        let queue = [
+            "movie-movie_1",
+            "tv-tv_2",
+            "tv-tv_3-seasonend-S2",
+            "weekly-digest"
+        ]
+        let upcoming: Set<String> = ["movie_1", "tv_2", "tv_3"]
+
+        let moviesOff = NotificationManager.staleIdentifiers(
+            from: queue.map(request), upcomingIDs: upcoming,
+            moviesAllowed: false, tvAllowed: true
+        )
+        XCTAssertEqual(Set(moviesOff), ["movie-movie_1"])
+
+        let tvOff = NotificationManager.staleIdentifiers(
+            from: queue.map(request), upcomingIDs: upcoming,
+            moviesAllowed: true, tvAllowed: false
+        )
+        XCTAssertEqual(Set(tvOff), ["tv-tv_2", "tv-tv_3-seasonend-S2"])
+    }
 }
