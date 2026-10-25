@@ -200,7 +200,7 @@ extension MediaItem {
                     let liveSeasons = tv.seasons.liveModels
                     for season in liveSeasons {
                         let liveEps = season.episodes.liveModels
-                        for ep in liveEps where !ep.isWatched {
+                        for ep in liveEps where !ep.isWatched && ep.isAvailable(asOf: now) {
                             ep.markWatched(true)
                         }
                     }

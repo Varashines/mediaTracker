@@ -1,5 +1,12 @@
 # MediaTracker — Architecture & Design Document
 
+> **Status: historical.** This document describes an earlier generation of the app and its
+> counts (file totals, LOC, test totals, component lists) are roughly 2× out of date. Treat
+> `Sources/` as the source of truth and see [`AUDIT-2026-10-25.md`](AUDIT-2026-10-25.md) §11
+> for the current state, the verifiable metrics, and the subsystems added since
+> (`CloudSyncService`, `DatabaseMigrations`, `WatchHistoryCoordinator`, Year in Review).
+
+
 > Native macOS media tracking app built with SwiftUI + SwiftData.  
 > Targets macOS 15+, Swift 6.0 strict concurrency. Zero external dependencies.
 

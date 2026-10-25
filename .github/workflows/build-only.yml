@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'App version string for the built bundle (e.g. 9.0.0)'
+        description: 'App version string for the built bundle (e.g. 10.1.0)'
         required: false
-        default: '9.0.0'
+        default: '10.1.0'
 
 permissions:
   contents: read

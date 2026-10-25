@@ -260,6 +260,8 @@ actor BackgroundDataService {
     func markAllEpisodesAsWatched(itemID: String) async {
         let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == itemID })
         guard let item = try? modelContext.fetch(descriptor).first else { return }
+        // Only mark what has aired; the fetch below also returns announced future episodes.
+        let now = Date()
         
         let tmdbIDString = item.id.split(separator: "_").last ?? item.id[...]
         guard let tmdbID = Int(tmdbIDString) else { return }
@@ -362,7 +364,7 @@ actor BackgroundDataService {
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
-                            episode.markWatched(true)
+                            if episode.isAvailable(asOf: now) { episode.markWatched(true) }
                         }
                         let existingNumbers = Set(tmdbEpisodes.map(\.episodeNumber))
                         let extras = RuntimeFallback.validExtras(
@@ -379,13 +381,13 @@ actor BackgroundDataService {
                                 ep.season = season
                                 modelContext.insert(ep)
                                 episodeMap[uid] = ep
-                                ep.markWatched(true)
+                                if ep.isAvailable(asOf: now) { ep.markWatched(true) }
                             }
                             season.episodeCount = max(season.episodeCount, season.episodes.count)
                         }
                     }
                 } else {
-                    for episode in season.episodes {
+                    for episode in season.episodes where episode.isAvailable(asOf: now) {
                         episode.markWatched(true)
                     }
                 }

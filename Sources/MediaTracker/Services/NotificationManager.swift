@@ -89,7 +89,12 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
     /// season-end suffix bug — every season-end alert scheduled correctly, then
     /// deleted as stale on the next pass — was invisible precisely because nothing
     /// covered it.
-    static func staleIdentifiers(from requests: [UNNotificationRequest], upcomingIDs: Set<String>) -> [String] {
+    static func staleIdentifiers(
+        from requests: [UNNotificationRequest],
+        upcomingIDs: Set<String>,
+        moviesAllowed: Bool = true,
+        tvAllowed: Bool = true
+    ) -> [String] {
         var stale: [String] = []
         for request in requests {
             let identifier = request.identifier
@@ -104,6 +109,10 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             } else {
                 base = identifier
             }
+            // Switching a channel off only filtered *new* scheduling, so pings already
+            // queued for that channel kept firing. Sweep them here.
+            if !moviesAllowed && base.hasPrefix("movie-") { stale.append(identifier); continue }
+            if !tvAllowed && base.hasPrefix("tv-") { stale.append(identifier); continue }
             guard let itemID = itemID(fromIdentifier: base) else { continue }
             if !upcomingIDs.contains(itemID) { stale.append(identifier) }
         }
@@ -298,6 +307,16 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: [baseID, "\(baseID)-day1", "\(baseID)-day2"]
         )
+        // Season-end requests embed the season (`tv-<id>-seasonend-S<n>`), so they cannot be
+        // addressed by a fixed identifier and used to survive completion of the show.
+        guard type == .tvShow else { return }
+        let seasonEndPrefix = "\(baseID)-seasonend"
+        Task {
+            let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+            let mine = pending.map(\.identifier).filter { $0.hasPrefix(seasonEndPrefix) }
+            guard !mine.isEmpty else { return }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: mine)
+        }
     }
 
     func removeAllPendingNotifications() {
@@ -330,10 +349,20 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
         content.userInfo = ["ITEM_TYPE": "weekly_digest"]
 
         let calendar = Calendar.current
-        let todayWeekday = calendar.component(.weekday, from: Date())
+        let now = Date()
+        let todayWeekday = calendar.component(.weekday, from: now)
         var daysAhead = weekday - todayWeekday
-        if daysAhead <= 0 { daysAhead += 7 }
-        guard let next = calendar.date(byAdding: .day, value: daysAhead, to: Date()) else { return }
+        if daysAhead < 0 {
+            daysAhead += 7
+        } else if daysAhead == 0 {
+            // Today is the digest day. Keep it for later today; only roll to next week once
+            // the time has passed. The old `<= 0` skipped today unconditionally, so opening
+            // the app on digest morning cancelled that week's digest.
+            if let today = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: now), today <= now {
+                daysAhead = 7
+            }
+        }
+        guard let next = calendar.date(byAdding: .day, value: daysAhead, to: now) else { return }
 
         var components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: next)
         components.hour = hour
@@ -406,12 +435,18 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return 
         }
 
+        let moviesAllowed = isChannelEnabled(.notificationsMovies)
+        let tvAllowed = isChannelEnabled(.notificationsTV)
+
         // Reconcile: drop our pending requests for items that are no longer
-        // upcoming (watched, completed, removed) so stale pings can't fire. The
-        // weekly digest is owned elsewhere — leave it alone.
+        // upcoming (watched, completed, removed) so stale pings can't fire, and drop
+        // anything belonging to a channel the user switched off. The weekly digest is
+        // owned elsewhere — leave it alone.
         let stale = Self.staleIdentifiers(
             from: await center.pendingNotificationRequests(),
-            upcomingIDs: Set(upcomingItemsFetched.map(\.id))
+            upcomingIDs: Set(upcomingItemsFetched.map(\.id)),
+            moviesAllowed: moviesAllowed,
+            tvAllowed: tvAllowed
         )
         if !stale.isEmpty {
             center.removePendingNotificationRequests(withIdentifiers: stale)
@@ -424,8 +459,6 @@ class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDel
             return date1 < date2
         }
 
-        let moviesAllowed = isChannelEnabled(.notificationsMovies)
-        let tvAllowed = isChannelEnabled(.notificationsTV)
         let channelFiltered = upcomingItems.filter {
             ($0.type == .movie && moviesAllowed) || ($0.type == .tvShow && tvAllowed)
         }

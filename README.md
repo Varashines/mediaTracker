@@ -131,12 +131,12 @@ Navigate your entire tracking station like a power user without leaving the keyb
 
 ### Requirements
 
-* macOS 14.0 (Sonoma) or newer.
+* macOS 15.0 (Sequoia) or newer.
 * Fully optimized for Apple Silicon Macs (M-Series processors) and Intel architectures.
 
 ### Installation from Source
 
-MediaTracker is maintained strictly as an independent Swift Package Manager project layout. Clone the repository and execute the automated compilation script:
+MediaTracker is maintained strictly as an independent Swift Package Manager project layout. A full **Xcode** installation is required — Command Line Tools alone cannot build it, because the SwiftData macro plugin that expands `@Model` ships only with Xcode. Clone the repository and execute the automated compilation script:
 
 ```bash
 git clone https://github.com/Varashines/mediaTracker
@@ -161,71 +161,17 @@ MediaTracker is **offline-first by default**, with all tracking data stored loca
 ### Setting Up Your Own Cloud Sync (Free)
 
 1. Create a free account at [supabase.com](https://supabase.com) and create a project (e.g., `media-tracker-sync`).
-2. Go to the **SQL Editor** in your Supabase dashboard and execute the following schema:
+2. In the **SQL Editor**, run the files in [`supabase/`](supabase/) **in this order**:
+   `media_tables.sql` → `collections.sql` → `watch_history.sql`.
 
-```sql
--- 1. Media Title Tracking State
-create table if not exists public.user_media (
-    user_id text not null,                -- Secret Sync Key
-    media_id text not null,               -- e.g. "movie_550" or "tv_1399"
-    type text not null,                   -- "Movie" or "TV"
-    state text not null,                  -- "Wishlist", "Watching", "Completed", "Paused", "Dropped"
-    taste text not null default 'None',   -- "Loved", "Liked", "Disliked", "Hated", "None"
-    custom_poster_url text,
-    is_soft_deleted boolean default false,
-    last_interaction_date timestamptz,
-    last_state_change_date timestamptz,
-    updated_at timestamptz default now(),
-    primary key (user_id, media_id)
-);
+   Those files are the source of truth for the schema, indexes, `updated_at` triggers and
+   RLS policies. This README used to reproduce them by hand and had drifted: it described a
+   `user_history` table that does not exist, omitted four of the six real tables, and its
+   policies were not idempotent. The real tables are `user_media`, `user_episodes`,
+   `user_collections`, `user_collection_items`, `user_watch_cycles` and `user_watch_events`.
 
--- 2. TV Episode Watch Progress
-create table if not exists public.user_episodes (
-    user_id text not null,
-    episode_id text not null,             -- e.g. "tv_1399_s1_e1"
-    show_id text not null,
-    season_number int not null,
-    episode_number int not null,
-    is_watched boolean not null default false,
-    watched_date timestamptz,
-    updated_at timestamptz default now(),
-    primary key (user_id, episode_id)
-);
-
--- 3. Watch Event Ledger / History
-create table if not exists public.user_history (
-    id uuid primary key default gen_random_uuid(),
-    user_id text not null,
-    media_id text not null,
-    cycle_number int not null default 0,
-    action text not null,                 -- "watched", "completed"
-    occurred_at timestamptz not null default now(),
-    created_at timestamptz default now()
-);
-
--- 4. Enable Row Level Security (RLS)
-alter table public.user_media enable row level security;
-alter table public.user_episodes enable row level security;
-alter table public.user_history enable row level security;
-
--- Both clauses bind to the sync key. The keyless case must fall through to NULL
--- (no rows), never to "trust the user_id in the request body":
---   coalesce(<header>, user_id)  ->  user_id = user_id  ->  TRUE for every row
--- `with check` is the only clause consulted for INSERT, so it has to carry the same
--- test as `using`; `length(user_id) >= 12` was satisfied by any string and bound
--- nothing. The (select ...) wrapper caches the header per query instead of per row.
-create policy "Secret key access for user_media" on public.user_media
-    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
-    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
-
-create policy "Secret key access for user_episodes" on public.user_episodes
-    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
-    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
-
-create policy "Secret key access for user_history" on public.user_history
-    for all using (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'))
-    with check (user_id = (select current_setting('request.headers', true)::json->>'x-sync-key'));
-```
+   Every table has RLS enabled and derives its tenant from the `x-sync-key` request header,
+   so treat the sync key as a password: anyone holding it can read and write your library.
 
 3. In MediaTracker, open **Settings > Connect > Cross-Device Cloud Sync**:
    * Turn **On** the Cloud Sync toggle.

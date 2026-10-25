@@ -308,7 +308,9 @@ final class MediaItem: Identifiable {
 
         for season in liveSeasons {
             let liveEpisodes = season.episodes.liveModels
-            for episode in liveEpisodes where !episode.isWatched {
+            // Only what has actually aired: marking future episodes watched hides them from
+            // the release calendar and writes watch history for episodes nobody could watch.
+            for episode in liveEpisodes where !episode.isWatched && episode.isAvailable(asOf: now) {
                 episode.markWatched(true, recordHistory: false)
                 mutatedEpisodes.append(episode)
             }

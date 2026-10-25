@@ -11,15 +11,8 @@ struct MediaTrackerApp: App {
     @AppStorage("theme_preference") private var themePreference: Int = 0
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            MediaItem.self, MovieDetails.self, TVShowDetails.self,
-            TVSeason.self, TVEpisode.self, CastMember.self, SeasonCastMember.self,
-            NetworkEntity.self, GenreEntity.self, LanguageEntity.self,
-            BadgeEntity.self, PersonImageEntity.self,
-            StudioAliasEntity.self, SearchCacheEntity.self,
-            MediaCollection.self, ProviderEntity.self, MediaFacetIndex.self,
-            WatchCycle.self, WatchEvent.self
-        ])
+        // Declared once in SchemaV1 so the version chain and the live schema cannot drift.
+        let schema = Schema.current
 
         let modelConfiguration: ModelConfiguration
         do {
@@ -72,6 +65,7 @@ struct MediaTrackerApp: App {
         do {
             return try ModelContainer(
                 for: schema,
+                migrationPlan: MediaTrackerMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -140,6 +134,7 @@ struct MediaTrackerApp: App {
                     AppLogger.info("Attempting to validate backup store...")
                     let _ = try ModelContainer(
                         for: schema,
+                        migrationPlan: MediaTrackerMigrationPlan.self,
                         configurations: [backupConfig]
                     )
                     AppLogger.info("Backup validated. Restoring from backup...")
@@ -152,6 +147,7 @@ struct MediaTrackerApp: App {
                     }
                     let container = try ModelContainer(
                         for: schema,
+                        migrationPlan: MediaTrackerMigrationPlan.self,
                         configurations: [modelConfiguration]
                     )
                     AppLogger.info("Database restored from backup.")
@@ -166,6 +162,7 @@ struct MediaTrackerApp: App {
                 AppLogger.info("Creating fresh ModelContainer...")
                 let container = try ModelContainer(
                     for: schema,
+                    migrationPlan: MediaTrackerMigrationPlan.self,
                     configurations: [modelConfiguration]
                 )
                 if !restoredFromBackup {
