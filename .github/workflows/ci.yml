@@ -35,40 +35,27 @@ jobs:
       - name: Build
         run: swift build
 
-      - name: Test stable suites
+      # The FULL suite is the gate. It used to be a hand-maintained list of 22 suite
+      # names, of which two (`ModelTests`, `UtilityTests`) matched no class at all —
+      # those are file names, not class names — so 43 of 63 classes never gated a
+      # merge, including every data-integrity suite (Persistence, CloudSync, Predicate,
+      # StoreLocation, LedgerDedup, HealPredicate).
+      #
+      # The old `continue-on-error` diagnostic is gone: with container pinning in
+      # MediaItem's deferred tasks and the MTTestCase teardown hook, a full run of all
+      # 514 tests completes on macOS 27 / Xcode 27.2. If the teardown crash returns,
+      # fix it rather than re-hiding the suite.
+      #
+      # Two CloudSyncScenario tests are skipped because they are environment-coupled,
+      # not because they fail on a logic error: they assert conflict outcomes that
+      # depend on `cloudSyncLastTimestamp` and on Secrets resolving to UserDefaults
+      # rather than the Keychain (a test bundle can look like an app bundle). They
+      # passed historically only because a previous run's persisted defaults suppressed
+      # the failure. Tracked in AUDIT-2026-10-25.md §11.3. Re-enable once the service takes
+      # an injectable `now` and an injectable secret store so the tests stop depending on
+      # machine state.
+      - name: Test (full suite)
         run: |
-          suites=(
-            BadgeEngineTests
-            BingeLogicTests
-            DateUtilsTests
-            DetailViewModelTests
-            EpisodeRangeTests
-            FilterAndSortTests
-            FirstWatchedDateTests
-            ImageCacheLoadTests
-            ImportSeasonTasteTests
-            MarkWatchedTests
-            ModelTests
-            NetworkingTests
-            ProgressCalculationTests
-            RuntimeFallbackTests
-            SeasonTasteTests
-            StateTransitionTests
-            SyncCachedPropertiesTests
-            UtilityTests
-            WatchHistoryCoordinatorTests
-            WatchProvidersTests
-            WeeklyDigestTests
-            YearInReviewTests
-          )
-          for suite in "${suites[@]}"; do
-            swift test --filter "$suite"
-          done
-
-      - name: Test full suite (SwiftData teardown diagnostic)
-        # NOTE: SwiftData in-memory teardown race can still crash full-suite post-assertions
-        # even with SaveCoordinator.cancelAll() swizzle (Tests/Support/TestTeardown.swift).
-        # Stable suites above are the hard gate; keep this diagnostic visible until
-        # the framework-level container teardown race is fully eliminated.
-        continue-on-error: true
-        run: swift test
+          swift test \
+            --skip 'CloudSyncScenarioTests/testACorrectedEpisodeDateReachesProjectionAndLedger' \
+            --skip 'CloudSyncScenarioTests/testLegacyTasteSpellingIsNotAConflict'

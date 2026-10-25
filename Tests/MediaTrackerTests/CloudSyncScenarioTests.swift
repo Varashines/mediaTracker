@@ -9,7 +9,7 @@ import SwiftData
 /// conflicts decided on the user-edit time, the incremental watermark, the taste spelling the
 /// other app writes, one watch logged twice, and corrections that have to travel to the ledger
 /// as well as the projection.
-final class CloudSyncScenarioTests: XCTestCase {
+final class CloudSyncScenarioTests: MTTestCase {
 
     // MARK: - Stub transport
 
@@ -157,7 +157,18 @@ final class CloudSyncScenarioTests: XCTestCase {
     override func tearDownWithError() throws {
         MockURLProtocol.requestHandler = nil
         CloudSyncService.session = .shared
-        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.cloudSyncWatermark.rawValue)
+        // Remove everything setUp wrote. Leaving the endpoint and keys behind makes
+        // later suites believe cloud sync is configured, and leaving the timestamps
+        // behind changes the conflict decisions of the next sync that runs.
+        for key in [
+            UserDefaultsKeys.cloudSyncURL.rawValue,
+            UserDefaultsKeys.cloudSyncAnonKey.rawValue,
+            UserDefaultsKeys.cloudSyncKey.rawValue,
+            UserDefaultsKeys.cloudSyncWatermark.rawValue,
+            UserDefaultsKeys.cloudSyncLastTimestamp.rawValue
+        ] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         try super.tearDownWithError()
     }
 

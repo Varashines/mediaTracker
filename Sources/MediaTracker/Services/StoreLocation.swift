@@ -174,6 +174,11 @@ enum StoreLocation {
             return false
         }
         defer { sqlite3_close(db) }
+        // The file may still be held by the store that just wrote it — this runs at
+        // launch, and in tests immediately after a container is created. Without a busy
+        // timeout a transient lock reads as "not our schema", and the legacy store is
+        // abandoned instead of migrated.
+        sqlite3_busy_timeout(db, 2000)
 
         var statement: OpaquePointer?
         let sql = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ZMEDIAITEM' LIMIT 1"
