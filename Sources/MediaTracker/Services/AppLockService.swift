@@ -25,14 +25,24 @@ final class AppLockService {
         LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil)
     }
 
+    /// Whether the user can authenticate at all — Touch ID *or* the account password.
+    ///
+    /// The lock used to be biometric-only, so a user who removed their fingerprints in
+    /// System Settings silently lost the lock: `lock()` returned early and the app opened
+    /// straight into the library. `.deviceOwnerAuthentication` keeps the lock enforceable
+    /// because macOS falls back to the login password.
+    static var ownerAuthenticationAvailable: Bool {
+        LAContext().canEvaluatePolicy(.deviceOwnerAuthentication, error: nil)
+    }
+
     private init() {
         isEnabled = UserDefaults.standard.bool(forKey: UserDefaultsKeys.appLockEnabled.rawValue)
     }
 
-    /// Locks the app. No-ops if disabled or if biometrics became unavailable
-    /// (so the user is never trapped behind an unenforceable lock).
+    /// Locks the app. No-ops only if the lock is disabled or no authentication method
+    /// exists at all (so the user is never trapped behind an unenforceable lock).
     func lock() {
-        guard isEnabled, Self.biometricsAvailable else { return }
+        guard isEnabled, Self.ownerAuthenticationAvailable else { return }
         isLocked = true
     }
 
@@ -40,13 +50,14 @@ final class AppLockService {
         isLocked = false
     }
 
-    /// Prompts for Touch ID. Returns true only on successful authentication.
+    /// Prompts for Touch ID, falling back to the account password. Returns true only on
+    /// successful authentication.
     func requestBiometricUnlock() async -> Bool {
-        guard Self.biometricsAvailable else { return false }
+        guard Self.ownerAuthenticationAvailable else { return false }
         let context = LAContext()
         do {
             return try await context.evaluatePolicy(
-                .deviceOwnerAuthenticationWithBiometrics,
+                .deviceOwnerAuthentication,
                 localizedReason: "Unlock MediaTracker"
             )
         } catch {

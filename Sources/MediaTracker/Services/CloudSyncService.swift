@@ -3,6 +3,18 @@ import SwiftData
 
 /// High-performance, zero-dependency cloud sync client for Supabase PostgREST.
 /// Operates completely via native `URLSession` to keep MediaTracker lean and fast.
+
+/// A sync row that records which tenant it belongs to.
+///
+/// The sync key used to travel as `user_id=eq.<key>` in every request URL. That put the
+/// tenant secret into proxy logs, PostgREST access logs and the on-disk `URLCache`. PostgREST
+/// already scopes rows by the `x-sync-key` header through RLS, so the URL filter bought
+/// nothing. It is checked client-side instead: a misconfigured policy now degrades to "rows
+/// discarded" rather than "another tenant's library imported".
+private protocol SyncRow: Decodable {
+    var user_id: String { get }
+}
+
 @ModelActor
 actor CloudSyncService {
     static var supabaseURL: String {
@@ -582,7 +594,7 @@ actor CloudSyncService {
 
     // MARK: - Media Items Push / Pull
 
-    private struct RemoteMediaItem: Codable {
+    private struct RemoteMediaItem: Codable, SyncRow {
         var user_id: String
         var media_id: String
         var type: String
@@ -849,7 +861,7 @@ actor CloudSyncService {
 
     // MARK: - TV Episodes Push / Pull
 
-    private struct RemoteEpisode: Codable {
+    private struct RemoteEpisode: Codable, SyncRow {
         var user_id: String
         var episode_id: String
         var show_id: String
@@ -1001,7 +1013,7 @@ actor CloudSyncService {
 
     // MARK: - Collections Push / Pull
 
-    private struct RemoteCollection: Codable {
+    private struct RemoteCollection: Codable, SyncRow {
         var user_id: String
         var collection_id: String
         var name: String
@@ -1038,7 +1050,7 @@ actor CloudSyncService {
         }
     }
 
-    private struct RemoteCollectionItem: Codable {
+    private struct RemoteCollectionItem: Codable, SyncRow {
         var user_id: String
         var collection_id: String
         var media_id: String
@@ -1062,7 +1074,7 @@ actor CloudSyncService {
     private func fetchRemoteCollections(syncKey: String, since: String? = nil) async throws -> [RemoteCollection] {
         let rows: [RemoteCollection] = try await fetchAllPages(
             endpoint: "user_collections",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )
@@ -1073,7 +1085,7 @@ actor CloudSyncService {
     private func fetchRemoteCollectionItems(syncKey: String, since: String? = nil) async throws -> [RemoteCollectionItem] {
         let rows: [RemoteCollectionItem] = try await fetchAllPages(
             endpoint: "user_collection_items",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )
@@ -1290,7 +1302,7 @@ actor CloudSyncService {
 
     // MARK: - Watch History (cycles + events)
 
-    private struct RemoteWatchCycle: Codable {
+    private struct RemoteWatchCycle: Codable, SyncRow {
         var user_id: String
         var cycle_id: String
         var media_id: String
@@ -1328,7 +1340,7 @@ actor CloudSyncService {
         }
     }
 
-    private struct RemoteWatchEvent: Codable {
+    private struct RemoteWatchEvent: Codable, SyncRow {
         var user_id: String
         var event_id: String
         var cycle_id: String
@@ -1370,7 +1382,7 @@ actor CloudSyncService {
     private func fetchRemoteWatchCycles(syncKey: String, since: String? = nil) async throws -> [RemoteWatchCycle] {
         let rows: [RemoteWatchCycle] = try await fetchAllPages(
             endpoint: "user_watch_cycles",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )
@@ -1381,7 +1393,7 @@ actor CloudSyncService {
     private func fetchRemoteWatchEvents(syncKey: String, since: String? = nil) async throws -> [RemoteWatchEvent] {
         let rows: [RemoteWatchEvent] = try await fetchAllPages(
             endpoint: "user_watch_events",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )
@@ -1684,7 +1696,7 @@ actor CloudSyncService {
         return iso8601Formatter.string(from: date.addingTimeInterval(-5))
     }
 
-    private func fetchAllPages<T: Decodable>(
+    private func fetchAllPages<T: SyncRow>(
         endpoint: String,
         query: String,
         syncKey: String,
@@ -1720,7 +1732,15 @@ actor CloudSyncService {
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { break }
             let page = (try? JSONDecoder().decode([T].self, from: data)) ?? []
             if page.isEmpty { break }
-            out.append(contentsOf: page)
+            // Second line of defence behind RLS: never apply a row that names another tenant.
+            let mine = page.filter { $0.user_id == syncKey }
+            if mine.count != page.count {
+                AppLogger.error(
+                    "Cloud sync: discarded \(page.count - mine.count) row(s) belonging to another tenant",
+                    logger: AppLogger.sync
+                )
+            }
+            out.append(contentsOf: mine)
             offset += page.count
             if page.count < pageSize { break }
         }
@@ -1733,7 +1753,7 @@ actor CloudSyncService {
     /// `limit=0` the body is empty, so the whole call costs a couple of bytes instead of a
     /// full-table download. Used by the impact preview where only the total matters.
     private func fetchRemoteCount(endpoint: String, syncKey: String) async throws -> Int {
-        guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)?user_id=eq.\(syncKey)&select=user_id&limit=0") else {
+        guard let url = URL(string: "\(Self.supabaseURL)/rest/v1/\(endpoint)?select=user_id&limit=0") else {
             return 0
         }
         var request = URLRequest(url: url)
@@ -1754,7 +1774,8 @@ actor CloudSyncService {
 
     /// `media_id` → `date_added` for every cloud row, so a sync can tell which local titles
     /// still need their added date backfilled.
-    private struct RemoteMediaDateAdded: Codable {
+    private struct RemoteMediaDateAdded: Codable, SyncRow {
+        var user_id: String
         var media_id: String
         var date_added: String?
     }
@@ -1762,7 +1783,7 @@ actor CloudSyncService {
     private func fetchRemoteDateAdded(syncKey: String, since: String? = nil) async throws -> [String: String] {
         let rows: [RemoteMediaDateAdded] = try await fetchAllPages(
             endpoint: "user_media",
-            query: "user_id=eq.\(syncKey)&select=media_id,date_added",
+            query: "select=media_id,date_added,user_id",
             syncKey: syncKey,
             since: since
         )
@@ -1776,7 +1797,7 @@ actor CloudSyncService {
     private func fetchRemoteMedia(syncKey: String, since: String? = nil) async throws -> [RemoteMediaItem] {
         let rows: [RemoteMediaItem] = try await fetchAllPages(
             endpoint: "user_media",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )
@@ -1787,7 +1808,7 @@ actor CloudSyncService {
     private func fetchRemoteEpisodes(syncKey: String, since: String? = nil) async throws -> [RemoteEpisode] {
         let rows: [RemoteEpisode] = try await fetchAllPages(
             endpoint: "user_episodes",
-            query: "user_id=eq.\(syncKey)&select=*",
+            query: "select=*",
             syncKey: syncKey,
             since: since
         )

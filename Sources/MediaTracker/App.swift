@@ -240,6 +240,11 @@ struct MediaTrackerApp: App {
                 .environment(\.sleepManager, SleepManager.shared)
                 .sleepModeSupport()
                 .blur(radius: lockService.isLocked ? 6 : 0)
+                // Blurring hides the library but leaves every keyboard shortcut live
+                // (⌘F, ⌘1…7, space, w), so a locked app could still be driven. This is
+                // what actually stops interaction.
+                .disabled(lockService.isLocked)
+                .allowsHitTesting(!lockService.isLocked)
 
             if lockService.isLocked {
                 LockScreenView()
@@ -290,15 +295,26 @@ struct MediaTrackerApp: App {
 
     @ViewBuilder
     private var settingsContent: some View {
-        SettingsView()
-            .modelContainer(sharedModelContainer)
-            .preferredColorScheme(mappedScheme)
-            .tint(AppTheme.Colors.accent)
-            .onAppear {
-                updateSystemColorScheme()
-                applyTheme(themePreference)
-            }
-            .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+        // Settings is a separate window, so the lock overlay in `appMainContent` never
+        // covered it. ⌘, on a locked app opened a window that could switch the lock off
+        // without authentication, edit the API keys, and display the Supabase sync key in
+        // cleartext with a copy button. Gate the scene itself; LockScreenView can unlock
+        // from here.
+        if lockService.isLocked {
+            LockScreenView()
+                .modelContainer(sharedModelContainer)
+                .preferredColorScheme(mappedScheme)
+        } else {
+            SettingsView()
+                .modelContainer(sharedModelContainer)
+                .preferredColorScheme(mappedScheme)
+                .tint(AppTheme.Colors.accent)
+                .onAppear {
+                    updateSystemColorScheme()
+                    applyTheme(themePreference)
+                }
+                .onChange(of: themePreference) { _, newPref in applyTheme(newPref) }
+        }
     }
 
     private var mappedScheme: ColorScheme? {

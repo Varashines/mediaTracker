@@ -473,4 +473,33 @@ final class CloudSyncScenarioTests: MTTestCase {
                        corrected.timeIntervalSince1970, accuracy: 1.0,
                        "and so does the ledger, which the year review reads")
     }
+
+    /// The sync key is the tenant secret. It used to be sent as `user_id=eq.<key>` in every
+    /// request URL, which put it into proxy logs, PostgREST access logs and the on-disk
+    /// `URLCache`. PostgREST scopes rows by the `x-sync-key` header through RLS, and the
+    /// client re-checks the tenant after decoding.
+    @MainActor
+    func testSyncKeyNeverTravelsInRequestURLs() async throws {
+        localMedia(id: "movie_1", state: .active, lastInteraction: Date())
+        try save()
+        stub.tables["user_media"] = [cloudMedia(
+            "movie_1", taste: "Love", lastInteraction: stamp(-60), updatedAt: stamp(-60)
+        )]
+        setWatermark(-7200)
+
+        _ = await impact()
+        _ = await sync()
+
+        XCTAssertFalse(stub.recorded.isEmpty, "the run must have made requests")
+        for request in stub.recorded {
+            XCTAssertFalse(
+                request.query.contains("mt_sync_scenarios"),
+                "sync key leaked into a URL: \(request.table)?\(request.query)"
+            )
+            XCTAssertFalse(
+                request.query.contains("user_id=eq."),
+                "the tenant filter belongs in the header, not the URL: \(request.query)"
+            )
+        }
+    }
 }
