@@ -35,4 +35,4 @@ swift test               # run tests (XCTest)
 ## GitHub state
 
 - `main` requires the `CI` workflow to pass and linear history.
-- API keys live in the macOS Keychain (`KeychainStore`), never `UserDefaults`.
+- API keys live in the macOS Keychain (``Secrets` (Services/Secrets.swift)`), never `UserDefaults`.

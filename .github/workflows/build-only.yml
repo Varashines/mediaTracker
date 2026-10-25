@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'App version string for the built bundle (e.g. 9.0.0)'
+        description: 'App version string for the built bundle (e.g. 10.1.0)'
         required: false
-        default: '9.0.0'
+        default: '10.1.0'
 
 permissions:
   contents: read
@@ -41,6 +41,43 @@ jobs:
           key: ${{ runner.os }}-spm-${{ matrix.arch }}-${{ hashFiles('Package.swift') }}
           restore-keys: |
             ${{ runner.os }}-spm-${{ matrix.arch }}-
+
+      # Same identity as local development, so a DMG built here does not make the Keychain prompt
+      # on the next update. See release.yml for the full explanation.
+      - name: Import signing identity
+        env:
+          CERT_P12_BASE64: ${{ secrets.CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_P12_BASE64" ]; then
+            echo "::warning::CERT_P12_BASE64 is not configured; signing ad-hoc (Keychain will prompt on updates)."
+            echo "SIGN_IDENTITY=-" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 1800 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+
+          echo "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/id.p12"
+          security import "$RUNNER_TEMP/id.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/id.p12"
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | sed 's/"//g')
+
+          IDENTITY="MediaTracker Local Signing"
+          # Deliberately not `find-identity -p codesigning`: that filters by policy, and a
+          # self-signed certificate on a fresh runner is not trusted (trust settings are not part
+          # of a .p12). Trust is not required to *sign* — codesign accepts an untrusted identity —
+          # so this checks the certificate reached the keychain, and the packaging step verifies
+          # the signature it actually produced.
+          if ! security find-certificate -a -c "$IDENTITY" "$KEYCHAIN" >/dev/null 2>&1; then
+            echo "::error::Signing identity '$IDENTITY' is missing after import. Check CERT_P12_BASE64 and CERT_PASSWORD."
+            exit 1
+          fi
+          echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build App Bundle
         run: |
@@ -90,14 +127,25 @@ jobs:
               <key>CFBundleVersion</key>
               <string>${{ inputs.version }}</string>
               <key>LSMinimumSystemVersion</key>
-              <string>14.0</string>
+              <string>15.0</string>
               <key>NSHighResolutionCapable</key>
               <true/>
           </dict>
           </plist>
           EOF
 
-          codesign --force --deep --sign - "$APP_BUNDLE"
+          # A bundle must carry a signature to launch; prefer the imported identity so updates do
+          # not invalidate the Keychain ACL, and fall back to ad-hoc when none was configured.
+          codesign --force --sign "${SIGN_IDENTITY:--}" "$APP_BUNDLE"
+
+          # Never let a configured identity quietly degrade to ad-hoc: that is the failure that
+          # makes the Keychain prompt on every update, and it would only surface on a user's Mac.
+          if [ "$SIGN_IDENTITY" != "-" ]; then
+            if ! codesign -dv --verbose=2 "$APP_BUNDLE" 2>&1 | grep -q "Authority=$SIGN_IDENTITY"; then
+              echo "::error::$APP_BUNDLE was not signed by $SIGN_IDENTITY"
+              exit 1
+            fi
+          fi
 
       - name: Install create-dmg utility
         run: brew install create-dmg

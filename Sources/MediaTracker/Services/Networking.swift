@@ -50,8 +50,8 @@ actor APIClient {
     private var inFlightSeasonAggregateCredits: [String: Task<[SeasonAggregateCastResult], Error>] = [:]
     private var inFlightImageFetches: [String: Task<TMDBImagesResponse, Error>] = [:]
     
-    private nonisolated var tmdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue) ?? "" }
-    private nonisolated var omdbApiKey: String { UserDefaults.standard.string(forKey: UserDefaultsKeys.omdbAPIKey.rawValue) ?? "" }
+    private nonisolated var tmdbApiKey: String { Secrets.value(for: .tmdb) }
+    private nonisolated var omdbApiKey: String { Secrets.value(for: .omdb) }
 
     // Trending cache (1-hour TTL)
     private var trendingMoviesCache: (data: [MediaSearchResult], timestamp: Date)?
@@ -138,7 +138,7 @@ actor APIClient {
     }
 
     nonisolated var isTMDBConfigured: Bool {
-        UserDefaults.standard.string(forKey: UserDefaultsKeys.tmdbAPIKey.rawValue)?.isEmpty == false
+        Secrets.has(.tmdb)
     }
     
     private nonisolated func isJWTToken(_ key: String) -> Bool {

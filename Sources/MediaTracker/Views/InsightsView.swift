@@ -146,6 +146,7 @@ struct InsightsView: View {
                                     .foregroundStyle(.white.opacity(0.4), .white.opacity(0.12))
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Close")
                             .contentShape(Circle())
                             .help("Close")
                         }

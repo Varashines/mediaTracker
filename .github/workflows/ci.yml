@@ -35,40 +35,20 @@ jobs:
       - name: Build
         run: swift build
 
-      - name: Test stable suites
-        run: |
-          suites=(
-            BadgeEngineTests
-            BingeLogicTests
-            DateUtilsTests
-            DetailViewModelTests
-            EpisodeRangeTests
-            FilterAndSortTests
-            FirstWatchedDateTests
-            ImageCacheLoadTests
-            ImportSeasonTasteTests
-            MarkWatchedTests
-            ModelTests
-            NetworkingTests
-            ProgressCalculationTests
-            RuntimeFallbackTests
-            SeasonTasteTests
-            StateTransitionTests
-            SyncCachedPropertiesTests
-            UtilityTests
-            WatchHistoryCoordinatorTests
-            WatchProvidersTests
-            WeeklyDigestTests
-            YearInReviewTests
-          )
-          for suite in "${suites[@]}"; do
-            swift test --filter "$suite"
-          done
-
-      - name: Test full suite (SwiftData teardown diagnostic)
-        # NOTE: SwiftData in-memory teardown race can still crash full-suite post-assertions
-        # even with SaveCoordinator.cancelAll() swizzle (Tests/Support/TestTeardown.swift).
-        # Stable suites above are the hard gate; keep this diagnostic visible until
-        # the framework-level container teardown race is fully eliminated.
-        continue-on-error: true
+      # The FULL suite is the gate. It used to be a hand-maintained list of 22 suite
+      # names, of which two (`ModelTests`, `UtilityTests`) matched no class at all —
+      # those are file names, not class names — so 43 of 63 classes never gated a
+      # merge, including every data-integrity suite (Persistence, CloudSync, Predicate,
+      # StoreLocation, LedgerDedup, HealPredicate).
+      #
+      # The old `continue-on-error` diagnostic is gone: with container pinning in
+      # MediaItem's deferred tasks and the MTTestCase teardown hook, a full run of all
+      # 517 tests completes on macOS 27 / Xcode 27.2 and on macos-latest. If the
+      # teardown crash returns, fix it rather than re-hiding the suite.
+      #
+      # There are no skips. Two CloudSyncScenario tests used to be excluded because they
+      # depended on a `cloudSyncLastTimestamp` left behind by an earlier run; they now
+      # declare their own sync state (`setWatermark`), so they pass from a clean defaults
+      # domain. See AUDIT-2026-10-25.md §11.3.
+      - name: Test (full suite)
         run: swift test

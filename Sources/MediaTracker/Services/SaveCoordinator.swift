@@ -10,6 +10,9 @@ class SaveCoordinator {
     private struct PendingSave {
         let token: UUID
         let task: Task<Void, Never>
+        /// Weak, for the same reason the task captures the context weakly: a pending
+        /// entry must never be the thing keeping a dead scene's context alive.
+        weak var context: ModelContext?
     }
 
     private var saveTasks: [ObjectIdentifier: PendingSave] = [:]
@@ -45,7 +48,7 @@ class SaveCoordinator {
                 }
             }
         }
-        saveTasks[id] = PendingSave(token: token, task: task)
+        saveTasks[id] = PendingSave(token: token, task: task, context: context)
     }
     
     /// Immediately forces a save operation, cancelling any pending debounced saves.
@@ -65,5 +68,26 @@ class SaveCoordinator {
     func cancelAll() {
         for (_, pendingSave) in saveTasks { pendingSave.task.cancel() }
         saveTasks.removeAll()
+    }
+
+    /// Saves every context that has a debounced save outstanding, right now.
+    ///
+    /// Called when the app terminates or goes to the background. The debounce window is
+    /// 350 ms and main-context autosave is deliberately disabled, so without this a
+    /// change made just before ⌘Q never reaches disk — nothing else would flush it.
+    func flushAll() {
+        let pending = saveTasks
+        saveTasks.removeAll()
+        for (_, entry) in pending {
+            entry.task.cancel()
+            // Weak, like the task's own capture: a context whose scene is already gone
+            // must be skipped rather than saved after its container died.
+            guard let context = entry.context else { continue }
+            do {
+                try context.save()
+            } catch {
+                AppLogger.error("Final save failed: \(error.localizedDescription)", logger: AppLogger.data)
+            }
+        }
     }
 }

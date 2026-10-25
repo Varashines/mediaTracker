@@ -297,4 +297,57 @@ final class ImportSeasonTasteTests: MTTestCase {
         let updatedEp2 = try context.fetch(desc).first
         XCTAssertEqual(updatedEp2?.lastWatchedDate, pastDate, "Split part 2 must inherit watch timestamp of part 1")
     }
+
+    /// Re-importing a backup over an existing Completed show must restore its episode
+    /// progress. The existing-item branch used to ignore `watchedEpisodeIDs` and then
+    /// recount, so a restored library showed every Completed show at 0% — and
+    /// auto-advance rewrote it to Wishlist.
+    func testMergeImportRestoresEpisodeProgressOnExistingShow() async throws {
+        let container = makeContainer()
+        let context = container.mainContext
+
+        let item = makeShowItem(id: "tv_888", tmdbID: 888, context: context)
+        let season = TVSeason(seasonNumber: 1, name: "Season 1", episodeCount: 3, showID: 888)
+        season.tvShowDetails = item.tvShowDetails
+        item.tvShowDetails?.seasons.append(season)
+        context.insert(season)
+        for number in 1...3 {
+            let episode = TVEpisode(
+                episodeNumber: number, seasonNumber: 1, name: "E\(number)",
+                overview: "", airDate: nil, runtime: 30, isWatched: false, showID: 888
+            )
+            episode.season = season
+            season.episodes.append(episode)
+            context.insert(episode)
+        }
+        item.stateValue = MediaState.completed.rawValue
+        try context.save()
+
+        let data = MediaItemData(
+            id: "tv_888", title: "Existing Show", type: "tv", state: "Completed",
+            dateAdded: Date(), taste: nil,
+            watchedEpisodeIDs: ["888_1_1", "888_1_2", "888_1_3"],
+            lastInteractionDate: nil, lastStateChangeDate: nil,
+            watchedEpisodeDates: nil,
+            seasonTasteOverrides: nil, posterURL: nil, overview: nil,
+            backdropURL: nil, releaseDate: nil, lastUpdated: nil,
+            titleLogoURL: nil, themeColorHex: nil, cachedRuntime: nil,
+            cachedEpisodeRuntime: nil, cachedWatchedEpisodeCount: nil,
+            remainingEpisodesCount: nil, cachedLanguage: nil,
+            cachedNetwork: nil, cachedNetworkLogoPath: nil, mood: nil
+        )
+        let service = BackgroundDataService(modelContainer: container)
+
+        let result = await service.importLibraryData(
+            backup: LibraryBackup(items: [data], collections: nil),
+            strategy: .merge,
+            triggerPostImportBackfill: false
+        )
+
+        XCTAssertEqual(result.merged, 1)
+        let episodes = try context.fetch(FetchDescriptor<TVEpisode>())
+            .filter { $0.showID == 888 }
+        XCTAssertEqual(episodes.filter(\.isWatched).count, 3, "Merge must restore watched episodes onto an existing show")
+        XCTAssertEqual(try context.fetch(FetchDescriptor<MediaItem>()).first?.state, .completed)
+    }
 }

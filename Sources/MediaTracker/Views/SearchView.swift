@@ -148,6 +148,9 @@ struct SearchView: View {
                         .keyboardShortcut("4", modifiers: [.command, .option])
                 }
                 .opacity(0)
+                // Shortcut vehicles only — hide from VoiceOver and the hit-test path.
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
             }
         }
     }

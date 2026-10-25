@@ -187,6 +187,9 @@ struct ReleaseCalendarView: View {
                 .disabled(selectedDate == nil || isSearchActive)
             }
             .opacity(0)
+            // Shortcut vehicles only — hide from VoiceOver and the hit-test path.
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
         }
     }
     

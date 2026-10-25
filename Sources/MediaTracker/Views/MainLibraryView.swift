@@ -126,6 +126,7 @@ struct MainLibraryView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Clear search")
                                 .contentShape(Circle())
                                 .help("Remove \(entry.label)")
                             }
