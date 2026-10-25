@@ -511,4 +511,78 @@ final class CloudSyncScenarioTests: MTTestCase {
             )
         }
     }
+
+    /// One malformed row used to turn the whole page into `[]`, which ended pagination — every
+    /// remaining row was dropped and the watermark still advanced past them.
+    @MainActor
+    func testMalformedRowDoesNotDiscardTheRestOfThePage() async throws {
+        stub.tables["user_media"] = [
+            cloudMedia("movie_1", lastInteraction: stamp(-60), updatedAt: stamp(-60)),
+            ["media_id": "movie_broken", "updated_at": stamp(-59)],   // missing every required field
+            cloudMedia("movie_2", lastInteraction: stamp(-58), updatedAt: stamp(-58))
+        ]
+        setWatermark(-7200)
+
+        let result = await impact()
+
+        XCTAssertNil(result.errorDescription)
+        XCTAssertEqual(
+            Set(result.titlesToImport.map(\.id)), ["movie_1", "movie_2"],
+            "the good rows on either side of the malformed one must still arrive"
+        )
+    }
+
+    /// The pull must order by `(updated_at, primary key)`. Ordering on `updated_at` alone leaves
+    /// rows that share a stamp in planner order, so they can straddle a page boundary and arrive
+    /// twice or be skipped.
+    @MainActor
+    func testPullOrdersByTimestampThenPrimaryKey() async throws {
+        stub.tables["user_media"] = [cloudMedia("movie_1", lastInteraction: stamp(-60), updatedAt: stamp(-60))]
+        setWatermark(-7200)
+
+        _ = await impact()
+
+        let gets = stub.gets(of: "user_media")
+        XCTAssertFalse(gets.isEmpty, "the impact must have fetched user_media")
+        XCTAssertTrue(
+            gets.contains { $0.query.contains("order=updated_at.asc,media_id.asc") },
+            "expected a total ordering, got: \(gets.map(\.query))"
+        )
+    }
+
+    /// A device that holds no poster has nothing to say about the column. Sending `null` erased a
+    /// poster another device had set, because an explicit null means "clear it".
+    @MainActor
+    func testPushOmitsPosterWhenThisDeviceHasNone() async throws {
+        localMedia(id: "movie_1", lastInteraction: Date())
+        try save()
+
+        _ = await sync(uploading: ["movie_1"])
+
+        let bodies = stub.posts(to: "user_media").flatMap(\.body)
+        XCTAssertFalse(bodies.isEmpty, "the upload must have posted a row")
+        for body in bodies {
+            XCTAssertNil(
+                body["custom_poster_url"],
+                "no poster locally means no poster key in the payload: \(body.keys.sorted())"
+            )
+        }
+    }
+
+    /// …but a deliberate reset is an opinion, and travels as an empty string so it is not mistaken
+    /// for "no opinion".
+    @MainActor
+    func testResetPosterTravelsAsAnEmptyString() async throws {
+        let item = localMedia(id: "movie_1", lastInteraction: Date())
+        item.customPosterURL = ""
+        try save()
+
+        _ = await sync(uploading: ["movie_1"])
+
+        let bodies = stub.posts(to: "user_media").flatMap(\.body)
+        XCTAssertEqual(
+            bodies.first?["custom_poster_url"] as? String, "",
+            "a reset has to be distinguishable from silence"
+        )
+    }
 }

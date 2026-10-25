@@ -302,7 +302,7 @@ class DetailViewModel {
     }
 
     var isCustomPoster: Bool {
-        item.customPosterURL != nil
+        item.effectiveCustomPosterURL != nil
     }
 
     func selectPoster(url: String) {
@@ -323,9 +323,13 @@ class DetailViewModel {
     }
 
     func resetToDefaultPoster() {
-        guard item.modelContext != nil, item.customPosterURL != nil else { return }
+        guard item.modelContext != nil, item.effectiveCustomPosterURL != nil else { return }
 
-        item.customPosterURL = nil
+        // Empty string, not nil: nil means "this device has nothing to say about the poster", and
+        // a push with no opinion omits the column so it cannot erase what another device set. A
+        // reset is an opinion — the poster is cleared — and `""` is how it travels. Displays fold
+        // it back to "no custom poster" via `effectiveCustomPosterURL`.
+        item.customPosterURL = ""
 
         // Restore theme color tracking to the default poster
         item.themeColorSourceURL = item.posterURL
