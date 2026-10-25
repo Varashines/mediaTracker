@@ -137,6 +137,7 @@ struct SyncImpactSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close")
             .keyboardShortcut(.cancelAction)
         }
         .padding(.horizontal, AppTheme.Spacing.large)

@@ -303,6 +303,7 @@ struct SharePreviewPopup: View {
                     .foregroundStyle(.secondary, Color.primary.opacity(0.12))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close")
             .contentShape(Circle())
             .focused($closeButtonFocused)
             .help("Close")

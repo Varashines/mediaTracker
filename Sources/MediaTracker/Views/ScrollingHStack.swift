@@ -118,5 +118,6 @@ struct ScrollingHStack<Content: View>: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(direction == .left ? "Scroll left" : "Scroll right")
     }
 }

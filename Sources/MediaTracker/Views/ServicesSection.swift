@@ -206,6 +206,8 @@ struct ServicesSection: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel(showCloudAnonKey ? "Hide API key" : "Show API key")
+                                .contentShape(Rectangle())
                             }
                         }
 
@@ -236,6 +238,8 @@ struct ServicesSection: View {
                                 }
                                 .buttonStyle(.plain)
                                 .help("Copy Sync Key to Clipboard")
+                                .accessibilityLabel("Copy sync key to the clipboard")
+                                .contentShape(Rectangle())
                             }
                         }
 

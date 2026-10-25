@@ -286,6 +286,7 @@ struct CreateCollectionSheet: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Close")
                                 .contentShape(Circle())
                                 .help("Remove rule")
                             }

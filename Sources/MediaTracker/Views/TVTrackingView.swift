@@ -870,6 +870,8 @@ private struct SeasonSection: View {
         }
         .buttonStyle(.plain)
         .help(value.rawValue)
+        .accessibilityLabel("Rate this season \(value.rawValue.lowercased())")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -1075,6 +1077,7 @@ private struct EpisodeCube: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("About this episode")
                 .padding(.trailing, 12)
                 .padding(.bottom, 16)
                 .popover(isPresented: $showingOverview) {
@@ -1145,6 +1148,8 @@ private struct EpisodeCube: View {
                         }
                         .buttonStyle(.plain)
                         .help("Change watch date")
+                        .accessibilityLabel("Change watch date")
+                        .contentShape(Rectangle())
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)

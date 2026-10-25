@@ -84,6 +84,7 @@ struct ImportWizardSheet: View {
                             .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                     .contentShape(Circle())
                 }
             }

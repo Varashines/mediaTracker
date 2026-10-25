@@ -87,6 +87,8 @@ struct StudioAliasManagerView: View {
                     .foregroundStyle(.red.opacity(0.8))
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Delete alias for \(entity.target)")
+            .contentShape(Rectangle())
         }
     }
 

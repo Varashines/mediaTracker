@@ -171,6 +171,7 @@ struct CustomShareMenuView: View {
                     .foregroundStyle(.secondary, .quaternary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close")
             .contentShape(Circle())
             .focused($closeButtonFocused)
         }
