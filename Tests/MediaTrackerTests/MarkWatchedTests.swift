@@ -163,4 +163,48 @@ final class MarkWatchedTests: MTTestCase {
         XCTAssertEqual(season.watchedEpisodesCount, 0)
         XCTAssertEqual(tv.watchedEpisodesCount, 0)
     }
+
+    /// "Completed" / "mark all" used to mark episodes that had not aired yet. That wrote
+    /// watch history for episodes nobody could watch and removed them from the release
+    /// calendar and notifications.
+    @MainActor
+    func testBulkMarkLeavesUnairedEpisodesAlone() throws {
+        let container = try ModelContainer(
+            for: MediaItem.self, TVShowDetails.self, TVSeason.self,
+                SeasonCastMember.self, TVEpisode.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+
+        let item = MediaItem(id: "tv_1", title: "Airing Show", overview: "", type: .tvShow)
+        context.insert(item)
+        let tv = TVShowDetails(tmdbID: 1)
+        tv.item = item
+        item.tvShowDetails = tv
+        context.insert(tv)
+        let season = TVSeason(seasonNumber: 1, name: "S1", episodeCount: 3, showID: 1)
+        season.tvShowDetails = tv
+        tv.seasons.append(season)
+        context.insert(season)
+
+        let yesterday = Date().addingTimeInterval(-86_400)
+        let tomorrow = Date().addingTimeInterval(86_400)
+        for (number, airDate) in [(1, yesterday), (2, yesterday), (3, tomorrow)] {
+            let ep = TVEpisode(episodeNumber: number, seasonNumber: 1, name: "E\(number)", overview: "")
+            ep.airDateValue = airDate
+            ep.season = season
+            season.episodes.append(ep)
+            context.insert(ep)
+        }
+        try context.save()
+
+        item.markLoadedEpisodesAsWatched()
+
+        let episodes = try context.fetch(FetchDescriptor<TVEpisode>()).sorted { $0.episodeNumber < $1.episodeNumber }
+        XCTAssertEqual(episodes.count, 3)
+        XCTAssertTrue(episodes[0].isWatched, "aired episode 1 must be marked")
+        XCTAssertTrue(episodes[1].isWatched, "aired episode 2 must be marked")
+        XCTAssertFalse(episodes[2].isWatched, "the unaired episode must stay unwatched")
+        XCTAssertEqual(item.remainingEpisodesCount, 0)
+    }
 }

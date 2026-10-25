@@ -44,6 +44,7 @@ struct OverviewSection: View {
                             .foregroundStyle(isHovering ? .primary : .secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("About this title")
                     .contentShape(Circle())
                     .help("More about this title")
                 }

@@ -6,7 +6,7 @@ import SwiftData
 /// "Love"/"Like"/"Dislike", so a rating set on the phone parsed as `nil` here and every
 /// taste-driven feature (badge gating, the Loved filters, affinity, insights) ignored it.
 /// These tests pin the tolerant parse and the one-off heal that rewrites stored values.
-final class TasteCanonicalizationTests: XCTestCase {
+final class TasteCanonicalizationTests: MTTestCase {
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.tasteCanonicalizationV1.rawValue)

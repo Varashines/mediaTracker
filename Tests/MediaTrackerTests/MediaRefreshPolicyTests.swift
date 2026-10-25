@@ -1,7 +1,7 @@
 import XCTest
 @testable import MediaTracker
 
-final class MediaRefreshPolicyTests: XCTestCase {
+final class MediaRefreshPolicyTests: MTTestCase {
     private let now = Date()
 
     func testEvolvingStatusUsesWeeklyRefresh() {

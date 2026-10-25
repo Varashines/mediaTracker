@@ -1,5 +1,12 @@
 # MediaTracker — Technical Documentation
 
+> **Status: historical.** This document describes an earlier generation of the app and its
+> counts (file totals, LOC, test totals, component lists) are roughly 2× out of date. Treat
+> `Sources/` as the source of truth and see [`AUDIT-2026-10-25.md`](AUDIT-2026-10-25.md) §11
+> for the current state, the verifiable metrics, and the subsystems added since
+> (`CloudSyncService`, `DatabaseMigrations`, `WatchHistoryCoordinator`, Year in Review).
+
+
 > **Version:** 6.0.0  •  **Bundle ID:** `com.vara.mediatracker`  •  **Minimum macOS:** 15.0
 
 ---

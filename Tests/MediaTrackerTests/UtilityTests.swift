@@ -42,6 +42,36 @@ final class SaveCoordinatorTests: MTTestCase {
         let count = try context.fetch(FetchDescriptor<MediaItem>()).count
         XCTAssertEqual(count, 1)
     }
+
+    /// A change made inside the 350 ms debounce window must still reach disk when the
+    /// app quits. Autosave is disabled, so without `flushAll()` nothing would save it.
+    @MainActor
+    func testFlushAllPersistsPendingDebouncedSave() throws {
+        let container = try ModelContainer(
+            for: MediaItem.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+        context.insert(MediaItem(id: "1", title: "Quit Fast", overview: ""))
+
+        // A debounce far longer than the test: only flushAll() can save this.
+        SaveCoordinator.shared.requestSave(context, delayMs: 600_000)
+        XCTAssertTrue(context.hasChanges, "insert is still only in memory")
+
+        SaveCoordinator.shared.flushAll()
+
+        XCTAssertFalse(context.hasChanges, "flushAll must persist the pending change")
+        let stored = try context.fetch(FetchDescriptor<MediaItem>())
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored.first?.title, "Quit Fast")
+    }
+
+    @MainActor
+    func testFlushAllWithNothingPendingIsHarmless() {
+        SaveCoordinator.shared.flushAll()
+        SaveCoordinator.shared.flushAll()
+        XCTAssertTrue(true, "must not trap with an empty queue")
+    }
 }
 
 @MainActor

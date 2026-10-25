@@ -457,7 +457,7 @@ enum DatabaseMigrations {
             for item in items {
                 item.tasteValue = TasteValue.canonicalRaw(item.tasteValue)
             }
-            try? context.save()
+            context.saveReportingFailure()
             AppLogger.data.info("Canonicalised \(items.count, privacy: .public) legacy taste value(s)")
         }
         UserDefaults.standard.set(true, forKey: flag)

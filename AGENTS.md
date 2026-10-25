@@ -100,6 +100,12 @@ Single executable target, no packages/dependencies. All code in `Sources/MediaTr
 - Use `AppTheme.Animation.springGentle` or `.springSnappy`
 - **Transition Delay for Progressive Content**: For detailed/heavy statistical screens (e.g., `InsightsView`), use a sleep of `try? await Task.sleep(nanoseconds: 350_000_000)` (350ms) to allow the macOS navigation slide-in animation to complete showing a shimmering skeleton (`.shimmering()`) before rendering the final layout.
 
+### Credentials
+- API keys and the Supabase sync key live in the **Keychain** via `Secrets` (`Services/Secrets.swift`), never `@AppStorage`/`UserDefaults`. Add new secrets to `SecretKey` so the defaults migration and the settings reset pick them up.
+- Read with `Secrets.value(for: .tmdb)`; write with `Secrets.set(_:for:)`. Do not add `SecAccessControl` — the items must stay prompt-free.
+- Silence depends on code signing: `install.sh` signs with the local identity from `Dev/setup-signing.sh`. Ad-hoc signing (`--sign -`) changes the app's designated requirement every build, so macOS re-asks for Keychain access. If a user reports repeated prompts, check which identity the build used.
+- Outside the app bundle (`swift test`), `Secrets` transparently falls back to `UserDefaults`, so tests seed keys exactly as before.
+
 ### Theming
 - Accent colors via `AppTheme.Colors.accent` (reads dynamically from `AppThemeCoordinator.shared.accent`)
 - Backgrounds via `AppTheme.Colors.background(for: colorScheme)` (delegated to `AppThemeCoordinator.shared.background`)

@@ -79,7 +79,7 @@ class MooreMetricsService {
     private var characteristicsCache: [String: [CharacteristicInfo]] = [:]
 
     private var apiKey: String {
-        UserDefaults.standard.string(forKey: UserDefaultsKeys.mmAPIKey.rawValue) ?? ""
+        Secrets.value(for: .mooreMetrics)
     }
 
     var isConfigured: Bool {

@@ -128,7 +128,26 @@ struct GeneralSection: View {
                             showDivider: false,
                             isOn: Binding(
                                 get: { AppLockService.shared.isEnabled },
-                                set: { AppLockService.shared.isEnabled = $0 }
+                                set: { newValue in
+                                    // Turning the lock ON needs no proof; turning it OFF
+                                    // does. Otherwise anyone at an unlocked Mac can remove
+                                    // the protection in one click, which is the same
+                                    // weakness the Settings scene had.
+                                    if newValue {
+                                        AppLockService.shared.isEnabled = true
+                                    } else if !AppLockService.biometricsAvailable {
+                                        // `lock()` no-ops without biometrics, so an
+                                        // unlock prompt here could never be satisfied and
+                                        // the toggle would be impossible to turn off.
+                                        AppLockService.shared.isEnabled = false
+                                    } else {
+                                        Task { @MainActor in
+                                            if await AppLockService.shared.requestBiometricUnlock() {
+                                                AppLockService.shared.isEnabled = false
+                                            }
+                                        }
+                                    }
+                                }
                             )
                         )
                     } else {
@@ -194,7 +213,9 @@ struct GeneralSection: View {
         // Fallback keys written via @AppStorage raw strings
         defaults.removeObject(forKey: "notifications_time")
 
-        defaults.removeObject(forKey: "mm_api_key")
+        // Credentials live in the Keychain now; resetting preferences has to drop those too, or
+        // "reset" leaves the app still holding a sync key and API keys.
+        Secrets.clearAll()
         defaults.removeObject(forKey: "mm_debug_mode")
 
         if launchAtLogin {

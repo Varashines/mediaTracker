@@ -7,7 +7,7 @@ import XCTest
 /// (`293610_1_3` here, `tv_293610_s1_e3` from Android), and Android stamped its copy from local
 /// wall-clock time labelled UTC — hours ahead, occasionally past midnight. So one watch became two
 /// events, and because Year in Review groups by local day, the same episode appeared on two days.
-final class LedgerDedupTests: XCTestCase {
+final class LedgerDedupTests: MTTestCase {
 
     private let iso = ISO8601DateFormatter()
 
