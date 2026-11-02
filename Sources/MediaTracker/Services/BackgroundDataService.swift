@@ -449,10 +449,25 @@ actor BackgroundDataService {
         let remoteTV = (try? await APIClient.shared.fetchTMDBFavorites(mediaType: .tvShow)) ?? []
         let remoteAll = remoteMovies + remoteTV
 
+        // Resolve local membership once. This used to run one point query per
+        // remote favourite — hundreds of sequential round-trips through the
+        // actor's serialized context on a large account.
+        let remoteIDs = remoteAll.map { remote -> String in
+            "\(remote.type == .movie ? "movie" : "tv")_\(remote.id)"
+        }
+        var existingByID: [String: MediaItem] = [:]
+        if !remoteIDs.isEmpty {
+            var existingDescriptor = FetchDescriptor<MediaItem>(
+                predicate: #Predicate { remoteIDs.contains($0.id) }
+            )
+            existingDescriptor.propertiesToFetch = MediaItem.thumbnailProperties
+            let existing = (try? modelContext.fetch(existingDescriptor)) ?? []
+            existingByID = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        }
+
         for remote in remoteAll {
             let uniqueID = "\(remote.type == .movie ? "movie" : "tv")_\(remote.id)"
-            let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate<MediaItem> { $0.id == uniqueID })
-            if let existing = try? modelContext.fetch(descriptor).first {
+            if let existing = existingByID[uniqueID] {
                 if existing.tasteValue != TasteValue.love.rawValue {
                     existing.tasteValue = TasteValue.love.rawValue
                     existing.lastInteractionDate = Date()
@@ -474,6 +489,7 @@ actor BackgroundDataService {
                     newItem.tasteValue = TasteValue.love.rawValue
                     newItem.lastInteractionDate = Date()
                     newItem.syncCachedProperties(dirty: [])
+                    existingByID[uniqueID] = newItem
                     pulledCount += 1
                 }
             }

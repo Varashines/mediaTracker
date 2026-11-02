@@ -190,7 +190,9 @@ final class TVEpisode {
             timezone: season?.tvShowDetails?.timezone,
             serviceName: season?.tvShowDetails?.network ?? season?.tvShowDetails?.item?.cachedNetwork,
             for: season?.tvShowDetails
-        ) {
+        ), parsed != oldValue {
+            // Assigning an identical date would still mark the row dirty, which
+            // made every metadata refresh rewrite the air date of every episode.
             self.airDateValue = parsed
         }
         _airDateAsDateComputed = false
