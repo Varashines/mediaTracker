@@ -14,6 +14,11 @@ class DetailViewModel {
     
     var recommendations: [MooreMetricsRecommendation] = []
     var tmdbRecommendations: [MediaSearchResult] = []
+    /// String IDs of the TMDB recommendations already in the library, resolved
+    /// once when the results land. The card row used to run a `fetchCount` per
+    /// card inside `body`, so every hover-driven re-render issued N blocking
+    /// SQLite queries on the main actor.
+    private(set) var inLibraryRecommendationIDs: Set<String> = []
     var isLoadingRecommendations = false
     var trailerKey: String?
     var watchProviders: [WatchProviderResult] = []
@@ -455,6 +460,7 @@ class DetailViewModel {
                 }
                 await MainActor.run { [weak self] in
                     self?.tmdbRecommendations = results
+                    self?.resolveRecommendationPresence()
                     self?.isLoadingRecommendations = false
                 }
             } else {
@@ -469,6 +475,26 @@ class DetailViewModel {
                 }
             }
         }
+    }
+
+    /// Resolves which TMDB recommendations are already in the library in a single
+    /// `propertiesToFetch = [\.id]` query. Kept out of the view body, which used
+    /// to run one `fetchCount` per card on every render pass.
+    func resolveRecommendationPresence() {
+        guard let context = item.modelContext, !tmdbRecommendations.isEmpty else {
+            inLibraryRecommendationIDs = []
+            return
+        }
+        let ids = tmdbRecommendations.map { recommendation -> String in
+            let prefix = recommendation.type == .movie ? "movie" : "tv"
+            return "\(prefix)_\(recommendation.id)"
+        }
+        var descriptor = FetchDescriptor<MediaItem>(
+            predicate: #Predicate { ids.contains($0.id) && $0.isSoftDeleted == false }
+        )
+        descriptor.propertiesToFetch = [\.id]
+        let found = (try? context.fetch(descriptor)) ?? []
+        inLibraryRecommendationIDs = Set(found.map(\.id))
     }
 
     func markAllAsWatched() {
