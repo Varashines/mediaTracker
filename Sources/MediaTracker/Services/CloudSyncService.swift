@@ -193,7 +193,7 @@ actor CloudSyncService {
                                     type: local.typeValue,
                                     state: local.stateValue,
                                     taste: local.tasteValue,
-                                    posterURL: local.customPosterURL ?? local.posterURL,
+                                    posterURL: local.effectiveCustomPosterURL ?? local.posterURL,
                                     conflictCloudState: remote.state,
                                     conflictCloudTaste: remote.taste
                                 )
@@ -206,7 +206,7 @@ actor CloudSyncService {
                                     type: local.typeValue,
                                     state: local.stateValue,
                                     taste: local.tasteValue,
-                                    posterURL: local.customPosterURL ?? local.posterURL
+                                    posterURL: local.effectiveCustomPosterURL ?? local.posterURL
                                 )
                             )
                         }
@@ -238,7 +238,7 @@ actor CloudSyncService {
                             type: local.typeValue,
                             state: local.stateValue,
                             taste: local.tasteValue,
-                            posterURL: local.customPosterURL ?? local.posterURL
+                            posterURL: local.effectiveCustomPosterURL ?? local.posterURL
                         )
                     )
                 } else if local.syncEditTime.timeIntervalSince1970 > lastSyncTimestamp,
@@ -251,7 +251,7 @@ actor CloudSyncService {
                             type: local.typeValue,
                             state: local.stateValue,
                             taste: local.tasteValue,
-                            posterURL: local.customPosterURL ?? local.posterURL
+                            posterURL: local.effectiveCustomPosterURL ?? local.posterURL
                         )
                     )
                 }
@@ -299,7 +299,7 @@ actor CloudSyncService {
                 return ImpactEpisodeShow(
                     id: "tv_\(showID)",
                     title: media?.title ?? "Show #\(showID)",
-                    posterURL: media?.customPosterURL ?? media?.posterURL,
+                    posterURL: media?.effectiveCustomPosterURL ?? media?.posterURL,
                     episodeCount: count
                 )
             }.sorted { $0.episodeCount > $1.episodeCount }
@@ -309,7 +309,7 @@ actor CloudSyncService {
                 return ImpactEpisodeShow(
                     id: "tv_\(showID)",
                     title: media?.title ?? "Show #\(showID)",
-                    posterURL: media?.customPosterURL ?? media?.posterURL,
+                    posterURL: media?.effectiveCustomPosterURL ?? media?.posterURL,
                     episodeCount: count
                 )
             }.sorted { $0.episodeCount > $1.episodeCount }
@@ -625,7 +625,17 @@ actor CloudSyncService {
             try container.encode(type, forKey: .type)
             try container.encode(state, forKey: .state)
             try container.encode(taste, forKey: .taste)
-            try container.encode(custom_poster_url, forKey: .custom_poster_url)
+            // The poster is a rider, like the palette: a device holding none has nothing to say
+            // about it, so the key is omitted rather than sent as `null`. An explicit null clears
+            // the column — which is how one device erased a poster another had set, whenever it
+            // pushed an edit without having received the poster first.
+            //
+            // A deliberate "reset to default" still has to travel, so it is sent as an empty
+            // string: absent means "no opinion", `""` means "cleared", a URL means "this one".
+            // `effectiveCustomPosterURL` folds absent and empty back into "no poster" for the UI.
+            if let custom_poster_url {
+                try container.encode(custom_poster_url, forKey: .custom_poster_url)
+            }
             try container.encode(is_soft_deleted, forKey: .is_soft_deleted)
             try container.encode(last_interaction_date, forKey: .last_interaction_date)
             try container.encode(last_state_change_date, forKey: .last_state_change_date)
@@ -699,17 +709,28 @@ actor CloudSyncService {
     ///
     /// Both push paths go through this, because the one that does not is the one that keeps failing.
     private func postMediaRows(_ items: [MediaItem], syncKey: String) async throws -> Int {
-        let withPalette = items.filter { item in
-            item.themeColorHex != nil || item.themeMutedColorHex != nil || item.themeSecondaryColorHex != nil
-        }
-        let withoutPalette = items.filter { item in
-            item.themeColorHex == nil && item.themeMutedColorHex == nil && item.themeSecondaryColorHex == nil
-        }
-
         let chunkSize = 100
         var pushedCount = 0
 
-        for group in [withPalette, withoutPalette] where !group.isEmpty {
+        // Group by the exact key set the encoder will produce. Two optional riders are omitted
+        // when this device has nothing to say about them — the palette (all three colours or
+        // none) and the poster (absent when the device holds none) — so a mixed batch would send
+        // objects with different keys and PostgREST rejects the whole thing with PGRST102.
+        struct RowShape: Hashable {
+            let hasPalette: Bool
+            let hasPoster: Bool
+        }
+        func shape(of item: MediaItem) -> RowShape {
+            RowShape(
+                hasPalette: item.themeColorHex != nil
+                    || item.themeMutedColorHex != nil
+                    || item.themeSecondaryColorHex != nil,
+                hasPoster: item.customPosterURL != nil
+            )
+        }
+        let groups = Dictionary(grouping: items, by: shape(of:))
+
+        for group in groups.values where !group.isEmpty {
             for chunk in stride(from: 0, to: group.count, by: chunkSize) {
                 let slice = Array(group[chunk..<min(chunk + chunkSize, group.count)])
                 let payloads: [RemoteMediaItem] = slice.map { item in
@@ -1076,7 +1097,8 @@ actor CloudSyncService {
             endpoint: "user_collections",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "collection_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
@@ -1087,7 +1109,8 @@ actor CloudSyncService {
             endpoint: "user_collection_items",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "collection_id,media_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
@@ -1384,7 +1407,8 @@ actor CloudSyncService {
             endpoint: "user_watch_cycles",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "cycle_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
@@ -1395,7 +1419,8 @@ actor CloudSyncService {
             endpoint: "user_watch_events",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "event_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
@@ -1700,7 +1725,8 @@ actor CloudSyncService {
         endpoint: String,
         query: String,
         syncKey: String,
-        since: String? = nil
+        since: String? = nil,
+        tiebreaker: String
     ) async throws -> [T] {
         // Incremental watermark: every table carries a server-set updated_at, so an unchanged
         // table comes back empty instead of re-downloading the whole library.
@@ -1708,7 +1734,12 @@ actor CloudSyncService {
         // Stable paging. PostgREST pages by offset over whatever order the planner happens to
         // return, so a multi-page GET (episodes, watch events) could duplicate or skip rows
         // without an explicit sort. updated_at is indexed on every sync table.
-        fullQuery += "&order=updated_at.asc"
+        //
+        // The primary key is part of the sort on purpose. A batch push stamps many rows with the
+        // same `updated_at`, and sorting on that column alone leaves their relative order to the
+        // planner: rows can straddle a page boundary and arrive twice, or be skipped. The key
+        // makes the ordering total, so offset paging is deterministic.
+        fullQuery += "&order=updated_at.asc,\(tiebreaker).asc"
         if let since, !since.isEmpty {
             // `+` in the offset (…+00:00) is legal in a query string but decodes as a space,
             // which silently breaks the filter — so encode it.
@@ -1730,8 +1761,39 @@ actor CloudSyncService {
                 range: "\(offset)-\(offset + pageSize - 1)"
             )
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { break }
-            let page = (try? JSONDecoder().decode([T].self, from: data)) ?? []
-            if page.isEmpty { break }
+
+            // Decode row by row. Decoding the page as a whole meant one malformed row turned the
+            // entire page into `[]`, which ended pagination — every remaining row was silently
+            // dropped and the watermark then advanced past them. Skipping only the bad row keeps
+            // the rest of the pull intact and leaves a countable trace in the log.
+            guard let objects = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                AppLogger.error(
+                    "Cloud sync: \(endpoint) returned a page at offset \(offset) that was not a JSON array; stopping this table",
+                    logger: AppLogger.sync
+                )
+                break
+            }
+            if objects.isEmpty { break }
+
+            var page: [T] = []
+            var undecodable = 0
+            for object in objects {
+                guard let rowData = try? JSONSerialization.data(withJSONObject: object),
+                      let row = try? JSONDecoder().decode(T.self, from: rowData) else {
+                    undecodable += 1
+                    continue
+                }
+                page.append(row)
+            }
+            if undecodable > 0 {
+                // Not fatal: the good rows still apply and the next pull meets the same rows again.
+                // Losing one row is preferable to losing everything after it.
+                AppLogger.error(
+                    "Cloud sync: skipped \(undecodable) of \(objects.count) undecodable \(endpoint) row(s) at offset \(offset)",
+                    logger: AppLogger.sync
+                )
+            }
+
             // Second line of defence behind RLS: never apply a row that names another tenant.
             let mine = page.filter { $0.user_id == syncKey }
             if mine.count != page.count {
@@ -1741,8 +1803,10 @@ actor CloudSyncService {
                 )
             }
             out.append(contentsOf: mine)
-            offset += page.count
-            if page.count < pageSize { break }
+            // Advance by what the server returned, not by what decoded, so a page of unreadable
+            // rows cannot stall pagination.
+            offset += objects.count
+            if objects.count < pageSize { break }
         }
         return out
     }
@@ -1785,7 +1849,8 @@ actor CloudSyncService {
             endpoint: "user_media",
             query: "select=media_id,date_added,user_id",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "media_id"
         )
         // Deliberately no watermark from this projection: it selects `date_added`, which is an
         // arbitrary past instant, not the row's server write time.
@@ -1799,7 +1864,8 @@ actor CloudSyncService {
             endpoint: "user_media",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "media_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
@@ -1810,7 +1876,8 @@ actor CloudSyncService {
             endpoint: "user_episodes",
             query: "select=*",
             syncKey: syncKey,
-            since: since
+            since: since,
+            tiebreaker: "episode_id"
         )
         noteWatermark(rows.compactMap { $0.updated_at }.max())
         return rows
