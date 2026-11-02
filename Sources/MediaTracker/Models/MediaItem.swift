@@ -444,6 +444,10 @@ extension MediaItem {
         customLogoURL ?? titleLogoURL
     }
 
+    /// Scalar columns needed to render a thumbnail. Deliberately excludes
+    /// `searchableText`: that column is a multi-KB lowercased blob read only by
+    /// `#Predicate` (SQL-side), so listing it made every thumbnail fetch — including
+    /// 2,000-row refinement scans — carry text the result path never touches.
     nonisolated(unsafe) static let thumbnailProperties: [PartialKeyPath<MediaItem>] = [
         \.id, \.title, \.posterURL, \.customPosterURL, \.backdropURL, \.releaseDate,
         \.typeValue, \.stateValue, \.tasteValue, \.themeColorHex, \.themeColorSourceURL,
@@ -455,7 +459,6 @@ extension MediaItem {
         \.cachedSeasonCount,
         \.storedSmartBadgeLabel, \.storedSmartBadgeIsSparkle, \.storedIsUpcoming,
         \.storedNextEpisodeLabel, \.storedNextEpisodeRuntime, \.storedWatchProgressLabel, \.storedProgress,
-        \.searchableText,
         \.cachedTrailerKey, \.titleLogoURL, \.customLogoURL,
     ]
 

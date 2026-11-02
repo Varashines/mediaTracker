@@ -19,7 +19,18 @@ extension MediaItem {
             if type == .movie {
                 syncMovieProperties(skipNetwork: skipNetwork)
             } else if type == .tvShow {
-                syncTVProperties(now: now, currentState: currentState, skipNetwork: skipNetwork, forceRecalculate: fullSync || dirty.contains(.progress), userEditedWatchState: userEditedWatchState)
+                syncTVProperties(
+                    now: now,
+                    currentState: currentState,
+                    skipNetwork: skipNetwork,
+                    forceRecalculate: fullSync || dirty.contains(.progress),
+                    userEditedWatchState: userEditedWatchState,
+                    // The episode catalog only changes when metadata is refreshed.
+                    // A progress-only sync (marking an episode) used to rebuild
+                    // every episode ID for the show and re-query the item, on every
+                    // spacebar press.
+                    checkEpisodeCatalog: fullSync || dirty.contains(.metadata)
+                )
             }
             if let context = modelContext {
                 FacetIndexMaintenance.synchronize(item: self, in: context)
@@ -117,7 +128,7 @@ extension MediaItem {
         }
     }
 
-    func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false, userEditedWatchState: Bool = false) {
+    func syncTVProperties(now: Date, currentState: MediaState, skipNetwork: Bool = false, forceRecalculate: Bool = false, userEditedWatchState: Bool = false, checkEpisodeCatalog: Bool = true) {
         guard let tv = tvShowDetails else { return }
         
         // Reattach any orphaned seasons (same showID, but tvShowDetails == nil) so
@@ -152,7 +163,9 @@ extension MediaItem {
         if firstWatchedAt == nil {
             recordFirstWatchIfNeeded(tv.earliestEpisodeFirstWatchDate)
         }
-        scheduleWatchHistoryCatalogCheck(tv: tv)
+        if checkEpisodeCatalog {
+            scheduleWatchHistoryCatalogCheck(tv: tv)
+        }
         
         if progressResult.totalCount > 0 {
             self.cachedEpisodeRuntime = progressResult.averageEpisodeRuntime
