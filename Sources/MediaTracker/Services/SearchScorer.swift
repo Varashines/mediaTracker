@@ -12,6 +12,11 @@ struct SearchPayload: Sendable {
     let network: String?
     let language: String?
     let titleWords: [String]
+    /// Trigram set for the (already lowercased) title. Built once per payload and
+    /// reused for every token of every keystroke: the actor caches payloads per
+    /// library version, so this replaces a fresh `Array(title)` + `Set` build on
+    /// each fuzzy comparison.
+    let titleTrigrams: Set<String>
 
     init(
         title: String,
@@ -33,6 +38,20 @@ struct SearchPayload: Sendable {
         self.network = network
         self.language = language
         self.titleWords = titleWords ?? title.split(separator: " ").map(String.init)
+        self.titleTrigrams = Self.trigrams(of: title)
+    }
+
+    /// Character-trigram set. Shared by payload construction (title) and
+    /// `SearchScorer` (query tokens) so both sides are built identically.
+    static func trigrams(of value: String) -> Set<String> {
+        let chars = Array(value)
+        guard chars.count >= 3 else { return [value] }
+        var result = Set<String>()
+        result.reserveCapacity(chars.count - 2)
+        for i in 0...(chars.count - 3) {
+            result.insert(String(chars[i..<i + 3]))
+        }
+        return result
     }
 }
 
@@ -68,9 +87,19 @@ struct SearchEvaluation: Sendable {
 
 struct SearchScorer: Sendable {
     let tokens: [String]
+    /// Trigram sets for the query tokens, built once per scorer rather than once
+    /// per (item × token). Fuzzy scoring used to allocate a token trigram set for
+    /// every candidate in the refinement scan.
+    private let tokenTrigrams: [String: Set<String>]
 
     init(tokens: [String]) {
-        self.tokens = Self.normalizedTokens(tokens)
+        let normalized = Self.normalizedTokens(tokens)
+        self.tokens = normalized
+        var trigrams: [String: Set<String>] = [:]
+        for token in normalized where token.count >= 3 {
+            trigrams[token] = SearchPayload.trigrams(of: token)
+        }
+        self.tokenTrigrams = trigrams
     }
 
     static func tokenize(_ query: String) -> [String] {
@@ -140,7 +169,11 @@ struct SearchScorer: Sendable {
         if titleWords.contains(token) { return (200, .title) }
         if titleWords.contains(where: { $0.hasPrefix(token) }) { return (150, .title) }
         if title.contains(token) { return (100, .title) }
-        if title.count >= 3, token.count >= 3, trigramSimilarity(title, token) > 0.5 { return (50, .title) }
+        if title.count >= 3, token.count >= 3,
+           let tokenTrigrams = tokenTrigrams[token],
+           trigramSimilarity(payload.titleTrigrams, tokenTrigrams) > 0.5 {
+            return (50, .title)
+        }
 
         if let match = scoreField(creators, token: token, exact: 150, partial: 90, source: .creator) {
             return match
@@ -160,7 +193,7 @@ struct SearchScorer: Sendable {
         if let language, let match = scoreField([language], token: token, exact: 100, partial: 55, source: .language) {
             return match
         }
-        if overview.localizedStandardContains(token) { return (10, .overview) }
+        if containsLocalized(overview, token) { return (10, .overview) }
 
         return nil
     }
@@ -172,32 +205,42 @@ struct SearchScorer: Sendable {
         partial: Int,
         source: SearchMatchSource
     ) -> (score: Int, source: SearchMatchSource)? {
-        if values.contains(where: { $0.localizedStandardCompare(token) == .orderedSame }) {
+        if values.contains(where: { equalsLocalized($0, token) }) {
             return (exact, source)
         }
-        if values.contains(where: { $0.localizedStandardContains(token) }) {
+        if values.contains(where: { containsLocalized($0, token) }) {
             return (partial, source)
         }
         return nil
     }
 
-    private func trigramSimilarity(_ a: String, _ b: String) -> Double {
-        let aTrigrams = trigrams(a.lowercased())
-        let bTrigrams = trigrams(b.lowercased())
-        guard !aTrigrams.isEmpty, !bTrigrams.isEmpty else { return 0 }
-        let intersection = aTrigrams.intersection(bTrigrams).count
-        let union = aTrigrams.union(bTrigrams).count
-        return Double(intersection) / Double(union)
+    /// Case- and diacritic-insensitive equality, with a plain `==` fast path when
+    /// both sides are ASCII. Both sides are already lowercased, so ICU collation
+    /// can only change the answer for non-ASCII text — and `localizedStandardCompare`
+    /// is by far the most expensive call in the scoring loop.
+    private func equalsLocalized(_ value: String, _ token: String) -> Bool {
+        if value == token { return true }
+        guard !isPlainASCII(value) || !isPlainASCII(token) else { return false }
+        return value.localizedStandardCompare(token) == .orderedSame
     }
 
-    private func trigrams(_ s: String) -> Set<String> {
-        let chars = Array(s)
-        guard chars.count >= 3 else { return [s] }
-        var result = Set<String>()
-        for i in 0...(chars.count - 3) {
-            result.insert(String(chars[i..<i + 3]))
-        }
-        return result
+    /// Case- and diacritic-insensitive containment, with a `contains` fast path
+    /// for ASCII-only pairs (same reasoning as `equalsLocalized`).
+    private func containsLocalized(_ value: String, _ token: String) -> Bool {
+        if isPlainASCII(value) && isPlainASCII(token) { return value.contains(token) }
+        return value.localizedStandardContains(token)
+    }
+
+    private func isPlainASCII(_ value: String) -> Bool {
+        value.unicodeScalars.allSatisfy(\.isASCII)
+    }
+
+    private func trigramSimilarity(_ a: Set<String>, _ b: Set<String>) -> Double {
+        guard !a.isEmpty, !b.isEmpty else { return 0 }
+        let intersection = a.intersection(b).count
+        // |A ∪ B| = |A| + |B| − |A ∩ B|; avoids materialising the union set.
+        let union = a.count + b.count - intersection
+        return union > 0 ? Double(intersection) / Double(union) : 0
     }
 }
 
