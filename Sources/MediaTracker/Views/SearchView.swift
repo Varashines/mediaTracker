@@ -12,8 +12,6 @@ struct SearchView: View {
 
     @State private var searchVM: SearchViewModel
     @AppStorage("recent_searches") private var recentSearchesData: String = ""
-    /// Hover wash for the source toggle, matching the type pills' hover.
-    @State private var isSourceToggleHovered = false
 
     private var selectedType: SearchType {
         get { viewModel.filter.searchTypeFilter }
@@ -249,67 +247,27 @@ struct SearchView: View {
         .animation(AppTheme.Animation.fade, value: showsSourceFilter)
     }
 
-    /// Icon-only capsule switch for the source filter.
+    /// Sliding capsule switch for the source filter.
     ///
-    /// The capsule is the same height and material as the type pills, so it reads
-    /// as a sibling rather than a settings control. Two glyphs describe the two
-    /// sources: wifi is the online half, books is the library half. Turning it on
-    /// crosses out the library glyph, which is what "online only" means — no text
-    /// is needed for the state, and the state change is the whole explanation.
+    /// A native switch sits at a different height and in a different visual
+    /// language than the capsule pills; this one keeps their proportions and
+    /// animates its knob, so the state change reads as part of the same row.
+    /// Grey = library and online together, green = online only. The wifi glyph
+    /// lives on the knob, so the control still says what it controls without a
+    /// text label.
     @ViewBuilder
     private var onlineOnlyToggle: some View {
         let hiddenCount = searchVM.filteredLocalResults.count
 
-        Button {
-            setOnlineOnly(!isOnlineOnly)
-        } label: {
-            HStack(spacing: AppTheme.Spacing.mini) {
-                Image(systemName: "wifi")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
-
-                ZStack {
-                    Image(systemName: "books.vertical.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(isOnlineOnly ? Color.secondary.opacity(0.35) : Color.secondary)
-
-                    if isOnlineOnly {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.8))
-                            .frame(width: 16, height: 1.2)
-                            .rotationEffect(.degrees(-45))
-                    }
-                }
-                .frame(width: 14, height: 14)
-            }
-            .padding(.horizontal, AppTheme.Spacing.small)
-            .padding(.vertical, AppTheme.Spacing.mini)
-            .padding(AppTheme.Spacing.micro)
-            .background {
-                Capsule()
-                    .fill(isOnlineOnly
-                          ? AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.22 : 0.16)
-                          : (isSourceToggleHovered
-                             ? AppTheme.Colors.surfaceSubtle(for: colorScheme)
-                             : AppTheme.Colors.cardFill(for: colorScheme)))
-            }
-            .overlay {
-                Capsule()
-                    .stroke(
-                        isOnlineOnly
-                            ? AppTheme.Colors.accent.opacity(0.35)
-                            : AppTheme.Colors.strokeDefault(for: colorScheme),
-                        lineWidth: 0.8
-                    )
-            }
-            .contentShape(Capsule())
+        Toggle(
+            isOn: Binding(
+                get: { isOnlineOnly },
+                set: { setOnlineOnly($0) }
+            )
+        ) {
+            EmptyView()
         }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(AppTheme.Animation.microInteraction) {
-                isSourceToggleHovered = hovering
-            }
-        }
+        .toggleStyle(CapsuleSwitchToggleStyle())
         .help(isOnlineOnly
               ? "Online results only — click to include your library"
               : "Library and online results — click for online only")
@@ -317,7 +275,6 @@ struct SearchView: View {
         .accessibilityValue(isOnlineOnly
                             ? "On, \(hiddenCount) library matches hidden"
                             : "Off")
-        .accessibilityAddTraits(isOnlineOnly ? .isSelected : [])
     }
 
     private func searchTypeTitle(_ type: SearchType) -> String {
@@ -839,3 +796,52 @@ private struct CastCrewCell: View {
     }
 }
 
+
+/// Capsule switch used by the search source filter.
+///
+/// Keeps the pill row's proportions while behaving like a switch: the thumb
+/// travels the full track, the track tints grey (both sources) or green
+/// (online only), and the wifi glyph rides with the thumb. No text label.
+private struct CapsuleSwitchToggleStyle: ToggleStyle {
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let trackWidth: CGFloat = 54
+    private let trackHeight: CGFloat = 30
+    private let knobDiameter: CGFloat = 24
+    private let inset: CGFloat = 3
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(configuration.isOn
+                          ? Color.semanticGreen(for: colorScheme)
+                          : Color.secondary.opacity(0.28))
+
+                Circle()
+                    .fill(Color.white)
+                    .overlay {
+                        Image(systemName: "wifi")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(configuration.isOn
+                                             ? Color.semanticGreen(for: colorScheme)
+                                             : Color.secondary)
+                    }
+                    .frame(width: knobDiameter, height: knobDiameter)
+                    .padding(inset)
+                    .offset(x: configuration.isOn ? trackWidth - knobDiameter - inset * 2 : 0)
+                    .shadow(color: .black.opacity(0.18), radius: 1, y: 0.5)
+            }
+            .frame(width: trackWidth, height: trackHeight)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .animation(
+            AppThemeCoordinator.isReducingVisualEffects ? nil : AppTheme.Animation.springSnappy,
+            value: configuration.isOn
+        )
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+}
