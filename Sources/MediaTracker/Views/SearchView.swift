@@ -12,6 +12,8 @@ struct SearchView: View {
 
     @State private var searchVM: SearchViewModel
     @AppStorage("recent_searches") private var recentSearchesData: String = ""
+    /// Hover wash for the source toggle, matching the type pills' hover.
+    @State private var isSourceToggleHovered = false
 
     private var selectedType: SearchType {
         get { viewModel.filter.searchTypeFilter }
@@ -247,40 +249,75 @@ struct SearchView: View {
         .animation(AppTheme.Animation.fade, value: showsSourceFilter)
     }
 
-    /// Native on/off switch for the source filter, grouped with the type pills.
+    /// Icon-only capsule switch for the source filter.
     ///
-    /// On = online results only; off = library and online together. The label says
-    /// what "on" means, which is the piece a bare wifi glyph cannot carry — the
-    /// switch's state alone would read as connectivity rather than scope.
+    /// The capsule is the same height and material as the type pills, so it reads
+    /// as a sibling rather than a settings control. Two glyphs describe the two
+    /// sources: wifi is the online half, books is the library half. Turning it on
+    /// crosses out the library glyph, which is what "online only" means — no text
+    /// is needed for the state, and the state change is the whole explanation.
     @ViewBuilder
     private var onlineOnlyToggle: some View {
         let hiddenCount = searchVM.filteredLocalResults.count
 
-        Toggle(
-            isOn: Binding(
-                get: { isOnlineOnly },
-                set: { setOnlineOnly($0) }
-            )
-        ) {
-            HStack(spacing: AppTheme.Spacing.micro) {
+        Button {
+            setOnlineOnly(!isOnlineOnly)
+        } label: {
+            HStack(spacing: AppTheme.Spacing.mini) {
                 Image(systemName: "wifi")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
 
-                Text("Online only")
-                    .font(AppTheme.Font.caption)
+                ZStack {
+                    Image(systemName: "books.vertical.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(isOnlineOnly ? Color.secondary.opacity(0.35) : Color.secondary)
+
+                    if isOnlineOnly {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.8))
+                            .frame(width: 16, height: 1.2)
+                            .rotationEffect(.degrees(-45))
+                    }
+                }
+                .frame(width: 14, height: 14)
             }
-            .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
+            .padding(.horizontal, AppTheme.Spacing.small)
+            .padding(.vertical, AppTheme.Spacing.mini)
+            .padding(AppTheme.Spacing.micro)
+            .background {
+                Capsule()
+                    .fill(isOnlineOnly
+                          ? AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.22 : 0.16)
+                          : (isSourceToggleHovered
+                             ? AppTheme.Colors.surfaceSubtle(for: colorScheme)
+                             : AppTheme.Colors.cardFill(for: colorScheme)))
+            }
+            .overlay {
+                Capsule()
+                    .stroke(
+                        isOnlineOnly
+                            ? AppTheme.Colors.accent.opacity(0.35)
+                            : AppTheme.Colors.strokeDefault(for: colorScheme),
+                        lineWidth: 0.8
+                    )
+            }
+            .contentShape(Capsule())
         }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-        .tint(AppTheme.Colors.accent)
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(AppTheme.Animation.microInteraction) {
+                isSourceToggleHovered = hovering
+            }
+        }
         .help(isOnlineOnly
-              ? "Showing online results only — turn off to include your library"
-              : "Showing library and online results — turn on for online only")
+              ? "Online results only — click to include your library"
+              : "Library and online results — click for online only")
         .accessibilityLabel("Online results only")
         .accessibilityValue(isOnlineOnly
                             ? "On, \(hiddenCount) library matches hidden"
                             : "Off")
+        .accessibilityAddTraits(isOnlineOnly ? .isSelected : [])
     }
 
     private func searchTypeTitle(_ type: SearchType) -> String {
