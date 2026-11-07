@@ -615,10 +615,10 @@ struct DetailView: View {
                                 ForEach(viewModel.tmdbRecommendations) { recItem in
                                     let typePrefix = recItem.type == .movie ? "movie" : "tv"
                                     let uniqueID = "\(typePrefix)_\(recItem.id)"
-                                    let isPresent: Bool = {
-                                        let descriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == uniqueID && $0.isSoftDeleted == false })
-                                        return (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
-                                    }()
+                                    // Membership resolved once when the results land
+                                    // (DetailViewModel.resolveRecommendationPresence) —
+                                    // a fetchCount here ran per card, per body pass.
+                                    let isPresent = viewModel.inLibraryRecommendationIDs.contains(uniqueID)
 
                                     TrendingPosterCard(item: recItem, isInLibrary: isPresent)
                                         .equatable()

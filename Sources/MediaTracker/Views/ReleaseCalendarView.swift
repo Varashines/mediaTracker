@@ -681,8 +681,11 @@ struct ReleaseCalendarView: View {
     
     @ViewBuilder
     private func allMonthReleasesList(items: [CalendarReleaseItem]) -> some View {
+        // Hoisted: `Calendar.current` inside the closure was evaluated once per
+        // release (50-150 calendar copies per body pass).
+        let calendar = Calendar.current
         let groupedByDay = Dictionary(grouping: items) {
-            Calendar.current.startOfDay(for: $0.date)
+            calendar.startOfDay(for: $0.date)
         }
         let sortedDays = groupedByDay.keys.sorted()
         
@@ -737,7 +740,11 @@ private struct ReleaseThumbnailCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // `.equatable()` like every other grid call site: the metadata-only
+            // == keeps the card from re-rendering (and re-running its TimelineView)
+            // on unrelated parent passes.
             MediaThumbnailView(metadata: item.metadata, mode: .grid, action: action)
+                .equatable()
             
             Text(item.releaseContext)
                 .font(AppTheme.Font.small)

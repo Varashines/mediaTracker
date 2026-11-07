@@ -369,32 +369,33 @@ extension BackgroundDataService {
             let mazeRawBySeason = TVMazeEpisode.rawBySeason(mazeEpisodes)
 
             let newCastResults = details.cast
+            // Compare like with like. The stored relationship is capped at 15 and
+            // drops Creator/Director rows, while TMDB returns up to 30 raw credits —
+            // comparing counts directly made every show with more than 15 credits
+            // look changed. Each refresh then deleted and re-inserted 15 CastMember
+            // rows (dirtying the context) and cleared the taste/scoped caches even
+            // when the cast was identical.
+            let normalizedNewCast = Self.normalizedCast(from: newCastResults, limit: 15)
             let currentCast = tvDetails.cast
-            // Short-circuit: quick check before expensive sort-and-zip
-            let hasChanged = currentCast.count != newCastResults.count ||
-                            (currentCast.first?.name != newCastResults.first?.name) ||
-                            (currentCast.last?.name != newCastResults.last?.name) ||
-                            zip(currentCast.sorted(by: { $0.name < $1.name }),
-                                newCastResults.sorted(by: { $0.name < $1.name }))
-                            .contains(where: { $0.0.name != $0.1.name || $0.0.characterName != $0.1.character })
+                .filter { $0.characterName != "Creator" && $0.characterName != "Director" }
+                .sorted { $0.order < $1.order }
+                .prefix(15)
+            let hasChanged = currentCast.count != normalizedNewCast.count ||
+                zip(currentCast, normalizedNewCast).contains { current, new in
+                    current.name != new.name
+                        || current.characterName != new.character
+                        || current.profileURL != new.profileURL
+                }
 
             if hasChanged || tvDetails.cast.isEmpty {
                 tvDetails.cast.forEach { modelContext.delete($0) }
-            
-                var seen = Set<String>()
+
                 var newCastList: [CastMember] = []
-                for c in newCastResults.sorted(by: { $0.order < $1.order }) {
-                    guard c.character != "Creator", c.character != "Director" else { continue }
-                    let key = "\(c.name)|\(c.character)"
-                    if seen.contains(key) { continue }
-                    seen.insert(key)
-                    
-                    let profileURL = APIClient.tmdbImageURL(path: c.profilePath, size: "w185")
-                    let member = CastMember(name: c.name, characterName: c.character, profileURL: profileURL, order: c.order, mediaID: item.id)
+                for c in normalizedNewCast {
+                    let member = CastMember(name: c.name, characterName: c.character, profileURL: c.profileURL, order: c.order, mediaID: item.id)
                     member.tvShowDetails = tvDetails
                     modelContext.insert(member)
                     newCastList.append(member)
-                    if newCastList.count >= 15 { break }
                 }
                 tvDetails.cast = newCastList
             }
@@ -646,11 +647,18 @@ extension BackgroundDataService {
                             if episode.season?.persistentModelID != season.persistentModelID {
                                 episode.season = season
                             }
-                            episode.name = epName
-                            episode.overview = epOverview
-                            episode.airDate = ep.airDate
-                            episode.airstamp = matchingMaze?.airstamp
-                            episode.runtime = runtime
+                            // Assign only what actually differs. Writing the same value
+                            // still marks the row dirty in SwiftData, so the previous
+                            // unconditional rewrite dirtied every episode of every
+                            // refreshed show and made the next save write all of them
+                            // back. A narrower `propertiesToFetch` cannot help here:
+                            // these rows are read for the comparison and written on
+                            // change, and an unfetched property would fault per row.
+                            if episode.name != epName { episode.name = epName }
+                            if episode.overview != epOverview { episode.overview = epOverview }
+                            if episode.airDate != ep.airDate { episode.airDate = ep.airDate }
+                            if episode.airstamp != matchingMaze?.airstamp { episode.airstamp = matchingMaze?.airstamp }
+                            if episode.runtime != runtime { episode.runtime = runtime }
                             episode.updateAirDateValue()
                         }
                     }
@@ -865,5 +873,31 @@ extension BackgroundDataService {
         // save crash.
         if written > 0 { modelContext.saveReportingFailure() }
         return written
+    }
+
+    /// TMDB credits normalized exactly the way they are persisted: Creator/Director
+    /// rows dropped, duplicates collapsed on `name|character`, ordered by credit
+    /// order, and capped at `limit`. Used for both the change comparison and the
+    /// insert pass so the two can never drift apart again.
+    private static func normalizedCast(
+        from results: [CastMemberResult],
+        limit: Int
+    ) -> [(name: String, character: String, profileURL: String?, order: Int)] {
+        var seen = Set<String>()
+        var normalized: [(name: String, character: String, profileURL: String?, order: Int)] = []
+        normalized.reserveCapacity(min(results.count, limit))
+        for credit in results.sorted(by: { $0.order < $1.order }) {
+            guard credit.character != "Creator", credit.character != "Director" else { continue }
+            let key = "\(credit.name)|\(credit.character)"
+            guard seen.insert(key).inserted else { continue }
+            normalized.append((
+                name: credit.name,
+                character: credit.character,
+                profileURL: APIClient.tmdbImageURL(path: credit.profilePath, size: "w185"),
+                order: credit.order
+            ))
+            if normalized.count >= limit { break }
+        }
+        return normalized
     }
 }

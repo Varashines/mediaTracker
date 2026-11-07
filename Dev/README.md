@@ -60,3 +60,27 @@ To reset Dev data, quit MediaTracker Dev and remove:
 ```bash
 rm -f "$HOME/Library/Application Support/MediaTracker Dev/default.store"*
 ```
+
+## Code signing
+
+Local installs (`install.sh`) and both CI DMGs must be signed by the same
+certificate. A Keychain ACL records the certificate's leaf hash, so a
+regenerated identity keeps its display name but becomes a different app to the
+Keychain — every stored credential then asks for approval.
+
+- Create the identity once: `./Dev/setup-signing.sh`
+- Push it to CI and record the expected hash:
+
+  ```bash
+  ./Dev/export-signing-identity.sh
+  ```
+
+  This overwrites `CERT_P12_BASE64` / `CERT_PASSWORD` and sets the
+  `SIGNING_CERT_SHA1` repository variable. `build-only.yml` and `release.yml`
+  compare the imported certificate against that variable and fail on drift,
+  instead of publishing a DMG that no longer matches existing installs.
+
+Re-run the export after creating a new identity (new Mac, deleted keychain
+entry, re-run of `setup-signing.sh`). If `SIGNING_CERT_SHA1` is unset the
+workflows warn and continue — intended for forks that do not use the shared
+certificate.

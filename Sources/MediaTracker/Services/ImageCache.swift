@@ -89,6 +89,10 @@ class ImageCache: NSObject, NSCacheDelegate {
     /// When each cache key was last asked for, so a delayed eviction can tell
     /// whether the cell came back while it was waiting.
     private var lastRequestedAt: [String: Date] = [:]
+    /// Upper bound for `lastRequestedAt`. Deferred evictions wait 500 ms, so a
+    /// timestamp older than a minute can never influence a decision — without a
+    /// cap the map grew for every URL and size ever requested in a session.
+    private let maxTrackedRequestTimestamps = 4096
     private var activeTasks: [String: Task<ImageContainer?, Never>] = [:]
     private var prewarmTasks: [UUID: Task<Void, Never>] = [:]
     private var lowPriorityPrewarmIDs: Set<UUID> = []
@@ -280,6 +284,12 @@ class ImageCache: NSObject, NSCacheDelegate {
         let cacheKey = generateCacheKey(key: key, size: targetSize)
         trackCacheKey(cacheKey, forKey: key)
         lastRequestedAt[cacheKey] = Date()
+        if lastRequestedAt.count > maxTrackedRequestTimestamps {
+            // Stale entries can't affect a 500 ms eviction decision. Dropping them
+            // only means the "cell came back" guard is skipped for those keys.
+            let cutoff = Date().addingTimeInterval(-60)
+            lastRequestedAt = lastRequestedAt.filter { $0.value >= cutoff }
+        }
 
         if let cached = checkMemoryCache(forKey: key, targetSize: targetSize) {
             return cached

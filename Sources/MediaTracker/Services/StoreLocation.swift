@@ -104,6 +104,23 @@ enum StoreLocation {
         return fm.fileExists(atPath: storeURL.path)
     }
 
+    /// The app's own Application Support directory — `MediaTracker` in production,
+    /// `MediaTracker Dev` for the isolated dev bundle. Created if missing.
+    static func dataDirectory() throws -> URL {
+        let applicationSupportDirectory = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directory = applicationSupportDirectory.appendingPathComponent(
+            isDevBundle ? devDirectoryName : productionDirectoryName,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
     static func makeConfiguration(schema: Schema) throws -> ModelConfiguration {
         let applicationSupportDirectory = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -112,24 +129,13 @@ enum StoreLocation {
             create: true
         )
 
+        let storeDirectory = try dataDirectory()
+        let storeURL = storeDirectory.appendingPathComponent(storeFilename)
+
         if isDevBundle {
-            let storeDirectory = applicationSupportDirectory.appendingPathComponent(
-                devDirectoryName,
-                isDirectory: true
-            )
-            try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
-            return ModelConfiguration(
-                schema: schema,
-                url: storeDirectory.appendingPathComponent(storeFilename)
-            )
+            return ModelConfiguration(schema: schema, url: storeURL)
         }
 
-        let storeDirectory = applicationSupportDirectory.appendingPathComponent(
-            productionDirectoryName,
-            isDirectory: true
-        )
-        try FileManager.default.createDirectory(at: storeDirectory, withIntermediateDirectories: true)
-        let storeURL = storeDirectory.appendingPathComponent(storeFilename)
         migrateLegacyStoreIfNeeded(newStoreURL: storeURL, applicationSupportDirectory: applicationSupportDirectory)
         return ModelConfiguration(schema: schema, url: storeURL)
     }

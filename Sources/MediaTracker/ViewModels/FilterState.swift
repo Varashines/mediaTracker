@@ -7,6 +7,14 @@ enum SearchType: String, CaseIterable {
     case castCrew = "Cast & Crew"
 }
 
+/// Which half of the search results the user wants to see. `all` renders the
+/// library section above the TMDB section; `online` hides the library matches so
+/// the results are only titles the user does not own yet.
+enum SearchSourceFilter: String, CaseIterable {
+    case all = "All Results"
+    case online = "Online Only"
+}
+
 @Observable @MainActor
 class FilterState {
     var selectedCategory: NavigationCategory = .home
@@ -18,6 +26,7 @@ class FilterState {
     var selectedStates: [MediaState] = []
     var selectedProviders: [String] = []
     var searchTypeFilter: SearchType = .all
+    var searchSourceFilter: SearchSourceFilter = .all
     var discoveryRefreshTrigger: Int = 0
     var categorySortOrders: [NavigationCategory: SortOrder] = [:]
     var categoryGroupBys: [NavigationCategory: GroupBy] = [:]

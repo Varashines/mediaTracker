@@ -105,7 +105,22 @@ actor ScopedStatsActor {
             let langName = LanguageUtils.languageName(for: name)
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && ($0.cachedLanguage == name || $0.cachedLanguage == langName) }
         case .network, .studio:
-            descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.cachedNetwork != nil }
+            // Use the facet index like the genre/provider branches. Without it,
+            // opening a network or studio hub aggregated the whole library
+            // (up to statsScanCap rows, cast included) to produce one studio's
+            // totals. Falls back to the broad scan when the index has no keys.
+            let keys = Array(Set((filter.sourceNames ?? [filter.name])
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }))
+            let facetDesc = FetchDescriptor<MediaFacetIndex>(
+                predicate: #Predicate { $0.kind == "network" && keys.contains($0.key) }
+            )
+            if let entries = try? modelContext.fetch(facetDesc), !entries.isEmpty {
+                let ids = Array(Set(entries.map(\.mediaItemID)))
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false && ids.contains($0.id) }
+            } else {
+                descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.cachedNetwork != nil }
+            }
         case .badge:
             descriptor.predicate = #Predicate { $0.isSoftDeleted == false && $0.storedSmartBadgeLabel == name }
         case .provider:
