@@ -88,6 +88,30 @@ jobs:
           fi
           echo "SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
+      # The Keychain ACL records the certificate's leaf hash, not its display name, so a
+      # regenerated identity keeps the name and changes the hash — silently breaking
+      # approval for every existing install. SIGNING_CERT_SHA1 pins the expected leaf;
+      # set it with Dev/export-signing-identity.sh, which derives both from the local key.
+      - name: Verify signing certificate has not drifted
+        env:
+          EXPECTED_CERT_SHA1: ${{ vars.SIGNING_CERT_SHA1 }}
+        run: |
+          if [ "${SIGN_IDENTITY:--}" = "-" ]; then
+            echo "::warning::No signing identity configured; this build is ad-hoc and will not match existing installs."
+            exit 0
+          fi
+          if [ -z "${EXPECTED_CERT_SHA1:-}" ]; then
+            echo "::warning::SIGNING_CERT_SHA1 is not set; a regenerated identity would go unnoticed."
+            exit 0
+          fi
+          ACTUAL=$(security find-certificate -a -c "$SIGN_IDENTITY" -Z "$RUNNER_TEMP/signing.keychain-db" \
+            | awk '/SHA-1 hash:/ { print $3; exit }')
+          if [ "$ACTUAL" != "$EXPECTED_CERT_SHA1" ]; then
+            echo "::error::Signing certificate drifted: expected $EXPECTED_CERT_SHA1, got ${ACTUAL:-none}. Re-export with Dev/export-signing-identity.sh."
+            exit 1
+          fi
+          echo "✅ Signing certificate $ACTUAL matches the documented identity."
+
       # ✅ 2. Application Bundle Compilation
       - name: Build App Bundle
         run: |
