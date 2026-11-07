@@ -220,6 +220,11 @@ struct SearchView: View {
                     }
                 }
 
+                if showsSourceFilter {
+                    onlineOnlyToggle
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                }
+
                 Spacer()
 
                 Button {
@@ -237,92 +242,45 @@ struct SearchView: View {
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.vertical, 12)
 
-            if showsSourceFilter {
-                sourceFilterRow
-                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
-                    .padding(.bottom, 12)
-                    .transition(.opacity)
-            }
-
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
         }
         .animation(AppTheme.Animation.fade, value: showsSourceFilter)
     }
 
-    /// Source toggle shown under the type pills once a query is active.
+    /// Native on/off switch for the source filter, grouped with the type pills.
+    ///
+    /// On = online results only; off = library and online together. The label says
+    /// what "on" means, which is the piece a bare wifi glyph cannot carry — the
+    /// switch's state alone would read as connectivity rather than scope.
     @ViewBuilder
-    private var sourceFilterRow: some View {
-        HStack(spacing: AppTheme.Spacing.small) {
-            Button {
-                setOnlineOnly(!isOnlineOnly)
-            } label: {
-                HStack(spacing: AppTheme.Spacing.micro) {
-                    Image(systemName: "globe")
-                        .font(.system(size: 11, weight: .semibold))
+    private var onlineOnlyToggle: some View {
+        let hiddenCount = searchVM.filteredLocalResults.count
 
-                    Text("Online only")
-                        .font(isOnlineOnly ? AppTheme.Font.bodyBold : AppTheme.Font.body)
-                }
-                .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
-                .padding(.horizontal, AppTheme.Spacing.compact)
-                .padding(.vertical, AppTheme.Spacing.mini)
-                .background {
-                    if isOnlineOnly {
-                        Capsule()
-                            .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.22 : 0.16))
-                            .overlay {
-                                Capsule()
-                                    .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.8)
-                            }
-                    } else {
-                        Capsule()
-                            .fill(AppTheme.Colors.cardFill(for: colorScheme))
-                    }
-                }
-                .overlay {
-                    if !isOnlineOnly {
-                        Capsule()
-                            .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
-                    }
-                }
-                .contentShape(Capsule())
+        Toggle(
+            isOn: Binding(
+                get: { isOnlineOnly },
+                set: { setOnlineOnly($0) }
+            )
+        ) {
+            HStack(spacing: AppTheme.Spacing.micro) {
+                Image(systemName: "wifi")
+                    .font(.system(size: 11, weight: .semibold))
+
+                Text("Online only")
+                    .font(AppTheme.Font.caption)
             }
-            .buttonStyle(.plain)
-            .help(isOnlineOnly ? "Show library matches too" : "Hide titles already in your library")
-            .accessibilityLabel(isOnlineOnly ? "Show all search results" : "Show only online results")
-            .accessibilityAddTraits(isOnlineOnly ? .isSelected : [])
-
-            Spacer(minLength: 0)
-
-            // The hidden section must never feel like a vanished result: keep a
-            // visible way back to the library matches the filter is hiding.
-            if isOnlineOnly, hasVisibleWebResults, !searchVM.filteredLocalResults.isEmpty {
-                Button {
-                    setOnlineOnly(false)
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "tray.full.fill")
-                            .font(.system(size: 10, weight: .semibold))
-
-                        Text("\(searchVM.filteredLocalResults.count) in library")
-                            .font(AppTheme.Font.caption)
-
-                        Text("Show")
-                            .font(AppTheme.Font.caption)
-                            .foregroundStyle(AppTheme.Colors.accent)
-                    }
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .padding(.horizontal, AppTheme.Spacing.compact)
-                    .padding(.vertical, AppTheme.Spacing.mini)
-                    .background(Capsule().fill(AppTheme.Colors.surfaceSubtle(for: colorScheme)))
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .help("Show \(searchVM.filteredLocalResults.count) library matches")
-                .transition(.opacity)
-            }
+            .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
         }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .tint(AppTheme.Colors.accent)
+        .help(isOnlineOnly
+              ? "Showing online results only — turn off to include your library"
+              : "Showing library and online results — turn on for online only")
+        .accessibilityLabel("Online results only")
+        .accessibilityValue(isOnlineOnly
+                            ? "On, \(hiddenCount) library matches hidden"
+                            : "Off")
     }
 
     private func searchTypeTitle(_ type: SearchType) -> String {
