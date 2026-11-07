@@ -446,7 +446,9 @@ private struct YearCalendarSection: View {
     let colorScheme: ColorScheme
     let ns: Namespace.ID
 
-    @State private var hoverDate: Date? = nil
+    // Hover is owned by each day cell. Keeping it here meant every pointer move
+    // invalidated the whole grid — re-running `computeWeeks()` plus ~3 Calendar
+    // operations per cell, twice per cell boundary crossed.
     private let cellSize: CGFloat = 32
     private let cellSpacing: CGFloat = 6
 
@@ -613,14 +615,12 @@ private struct YearCalendarSection: View {
                             let minutes = review.activityByDay[dayKey]?.minutes ?? 0
                             let isSelected = selectedDay.map { calendar.isDate($0, inSameDayAs: date) } ?? false
                             let isToday = calendar.isDateInToday(date)
-                            let isHovered = hoverDate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
 
                             ReviewDayCell(
                                 date: date,
                                 minutes: minutes,
                                 isSelected: isSelected,
                                 isToday: isToday,
-                                isHovered: isHovered,
                                 cellSize: cellSize,
                                 colorScheme: colorScheme,
                                 accent: AppTheme.Colors.accent
@@ -628,8 +628,6 @@ private struct YearCalendarSection: View {
                                 withAnimation(AppTheme.Animation.springSnappy) {
                                     selectedDay = isSelected ? nil : dayKey
                                 }
-                            } onHover: { hovering in
-                                hoverDate = hovering ? date : nil
                             }
                         } else {
                             Color.clear.frame(width: cellSize, height: cellSize)
@@ -686,12 +684,13 @@ private struct ReviewDayCell: View {
     let minutes: Int
     let isSelected: Bool
     let isToday: Bool
-    let isHovered: Bool
     let cellSize: CGFloat
     let colorScheme: ColorScheme
     let accent: Color
     let onTap: () -> Void
-    let onHover: (Bool) -> Void
+
+    /// Local so a pointer move only re-renders this cell, not the month grid.
+    @State private var isHovered = false
 
     var body: some View {
         Button(action: onTap) {
@@ -739,7 +738,7 @@ private struct ReviewDayCell: View {
         .buttonStyle(.plain)
         .animation(AppTheme.Animation.microInteraction, value: isHovered)
         .animation(AppTheme.Animation.springSnappy, value: isSelected)
-        .onHover { onHover($0) }
+        .onHover { isHovered = $0 }
         .help(tooltip)
         .accessibilityLabel(accessibilityDescription)
         .accessibilityAddTraits(isSelected ? .isSelected : [])

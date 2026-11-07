@@ -76,6 +76,42 @@ final class SearchScorerTests: MTTestCase {
             ["action", "netflix"]
         )
     }
+
+    /// The trigram branch now compares precomputed sets instead of rebuilding
+    /// both sides per item. "interstelar" is not a substring of "interstellar",
+    /// so this score can only come from that branch.
+    func testFuzzyTrigramTitleMatchStillScores() {
+        let evaluation = SearchScorer(tokens: ["interstelar"]).evaluate(
+            payload: payload(title: "Interstellar")
+        )
+
+        XCTAssertEqual(evaluation.score, 50)
+        XCTAssertTrue(evaluation.isEligibleForAllTokens)
+    }
+
+    /// ASCII fast paths must not break diacritic-insensitive matching. This is a
+    /// partial (contains) match, not an exact one — `localizedStandardCompare`
+    /// is case-insensitive but does not fold diacritics, so 70 is the pre-existing
+    /// score. The test pins that the non-ASCII fallback path still matches at all.
+    func testDiacriticInsensitiveGenreMatchStillScores() {
+        let evaluation = SearchScorer(tokens: ["drama"]).evaluate(
+            payload: payload(genres: ["Dráma"])
+        )
+
+        XCTAssertEqual(evaluation.score, 70)
+        XCTAssertTrue(evaluation.isEligibleForAllTokens)
+    }
+
+    /// Every token is scored once and reused by the AND/OR fallback, so the
+    /// fallback must still rank multiple partial matches.
+    func testMultiTokenFallbackUsesSameScores() {
+        let scorer = SearchScorer(tokens: ["action", "zzzz"])
+        let evaluation = scorer.evaluate(payload: payload(genres: ["Action"]))
+
+        XCTAssertFalse(evaluation.isEligibleForAllTokens)
+        XCTAssertTrue(evaluation.isEligibleForAnyToken)
+        XCTAssertEqual(evaluation.score, 120)
+    }
 }
 
 private struct TestSearchItem: SearchScorable {

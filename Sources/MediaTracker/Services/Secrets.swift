@@ -8,7 +8,8 @@ import Security
 /// "which palette", "is the digest on" — and belongs in the defaults plist.
 ///
 /// The raw values are the keys they were stored under before this store existed, which is what
-/// makes the one-time migration in `Secrets.migrateFromDefaultsIfNeeded()` a straight copy.
+/// makes the one-time migrations in `Secrets.migrateFromDefaultsIfNeeded()` and the legacy
+/// Keychain import a straight copy.
 enum SecretKey: String, CaseIterable, Sendable {
     case tmdb = "tmdb_api_key"
     case omdb = "omdb_api_key"
@@ -18,36 +19,50 @@ enum SecretKey: String, CaseIterable, Sendable {
     case cloudSyncAnonKey = "cloud_sync_anon_key"
 }
 
-/// Credentials, in the login Keychain rather than in `UserDefaults`.
+/// Credentials in an encrypted file, unlocked by one Keychain-held master key.
 ///
-/// ## Why the Keychain, and why it does not ask for anything
+/// ## Why a vault instead of one Keychain item per secret
 ///
-/// A keychain item is unreadable to other processes, unlike a preferences plist, which any process
-/// running as the user can just read. That is the whole security argument, and it costs nothing at
-/// runtime *if* the item has no access-control policy: no `SecAccessControl`, no `.userPresence`,
-/// so macOS never asks for Touch ID or a password. The item is readable by the app that owns it,
-/// exactly like the plist was.
+/// Five items mean five ACLs: a signing-identity change asks for approval once per item, and a
+/// machine backup carries five blobs whose ACLs are meaningless elsewhere. Here the ACL covers a
+/// single 32-byte key, the secrets themselves are AES-GCM ciphertext in
+/// `Application Support/<app>/credentials.vault`, and the payload backs up as one file.
 ///
-/// The one thing that can reintroduce prompts is code signing. A keychain item remembers the
+/// The Keychain is still what stands between another process and the vault: without the master key
+/// the file is random bytes. The vault changes how many items participate, not whether the OS guards
+/// them. It also means the secrets are never plaintext at rest, which the per-item layout did not
+/// offer.
+///
+/// ## Why it does not ask for anything
+///
+/// The master key item has no access-control policy: no `SecAccessControl`, no `.userPresence`, so
+/// macOS never asks for Touch ID or a password. It is readable by the app that owns it.
+///
+/// The one thing that can reintroduce prompts is code signing. A Keychain item remembers the
 /// *designated requirement* of the app that created it. Ad-hoc signing (`codesign --sign -`) derives
 /// that requirement from the binary's cdhash, so every rebuild looks like a different app and macOS
-/// asks again. Signing with any certificate — including a self-signed one, which needs no developer
-/// account — makes the requirement `identifier + certificate`, which survives rebuilds. So the app
-/// is silent on a machine where `install.sh` signs with a stable identity, and noisy on one where
-/// it does not. `install.sh` says which of the two it did.
+/// asks again. Signing with any certificate — including a self-signed one — makes the requirement
+/// `identifier + certificate`, which survives rebuilds. One item means at most one approval in that
+/// situation instead of five. `install.sh` says which identity was used.
 ///
-/// ## Why there is a cache
+/// ## Migration
 ///
-/// `SecItemCopyMatching` is a synchronous IPC to `securityd`. A request builder may ask for a key
-/// several times per API call, and the cache turns those into a dictionary lookup. Writes go through
-/// to the Keychain immediately, so the cache can never be newer than the store.
+/// Two one-time copies run behind the same read-back discipline:
 ///
-/// ## Why tests do not use the Keychain
+/// 1. `migrateFromDefaultsIfNeeded()` moves plaintext `UserDefaults` values into the vault.
+/// 2. The first vault read also imports the per-key Keychain items written by older builds, and only
+///    deletes them after the new file has been read back and compared.
 ///
-/// `swift test` runs inside `xctest`, which is not this app: the same item would prompt, and a
-/// headless test run would hang on a dialog nobody can click. Outside the app bundle this type
+/// A migration that trusts its own write is a migration that can delete the only copy of a credential
+/// when the write failed, so neither path removes the source until the destination verifies.
+///
+/// ## Why tests do not use the vault
+///
+/// `swift test` runs inside `xctest`, which is not this app: reading the master key would prompt, and
+/// a headless run would hang on a dialog nobody can click. Outside the app bundle this type
 /// transparently reads and writes `UserDefaults`, which is exactly where tests already put their
-/// fixtures, so no test had to change.
+/// fixtures, so no test had to change. `CredentialVault` itself is tested directly with an injected
+/// key provider.
 enum Secrets {
     // MARK: - Public API
 
@@ -55,16 +70,15 @@ enum Secrets {
     /// empty key as "not configured", and an empty string says that without an unwrap.
     static func value(for key: SecretKey) -> String {
         guard isApp else {
-            // Outside the app there is no Keychain item to read, and no cache either: tests seed
+            // Outside the app there is no vault to read, and no cache either: tests seed
             // UserDefaults between cases, and a process-wide cache would hand the next test the
             // previous one's answer.
             return UserDefaults.standard.string(forKey: key.rawValue) ?? ""
         }
-        if let cached = cached(key) { return cached }
-        let (stored, status) = readFromKeychain(key)
-        markReadable(status != errSecInteractionNotAllowed && status != errSecAuthFailed, for: key)
-        store(stored ?? "", for: key)
-        return stored ?? ""
+        lock.lock()
+        defer { lock.unlock() }
+        ensureLoadedLocked()
+        return cache[key.rawValue] ?? ""
     }
 
     static func has(_ key: SecretKey) -> Bool {
@@ -77,30 +91,59 @@ enum Secrets {
             UserDefaults.standard.set(trimmed, forKey: key.rawValue)
             return
         }
-        store(trimmed, for: key)
-        writeToKeychain(trimmed, for: key)
+        lock.lock()
+        defer { lock.unlock() }
+        ensureLoadedLocked()
+        guard !vaultUnreadable else {
+            // The vault exists but could not be decrypted (missing or refused master key).
+            // Writing now would replace values we cannot see, so the write is dropped instead.
+            AppLogger.error(
+                "Refusing to write \(key.rawValue): the credential vault is unreadable",
+                logger: AppLogger.data
+            )
+            return
+        }
+        var values = cache
+        values[key.rawValue] = trimmed
+        persistLocked(values)
     }
 
     static func clear(_ key: SecretKey) {
         if isApp {
-            store("", for: key)
-            deleteFromKeychain(key)
+            lock.lock()
+            ensureLoadedLocked()
+            if !vaultUnreadable {
+                var values = cache
+                values.removeValue(forKey: key.rawValue)
+                persistLocked(values)
+            } else {
+                cache.removeValue(forKey: key.rawValue)
+            }
+            lock.unlock()
+            deleteLegacyItem(key)
         }
         // Always clear the defaults copy too: a stale one would be migrated back on next launch.
         UserDefaults.standard.removeObject(forKey: key.rawValue)
     }
 
     static func clearAll() {
-        SecretKey.allCases.forEach(clear)
+        if isApp {
+            lock.lock()
+            didLoad = true
+            cache.removeAll()
+            vaultUnreadable = false
+            lock.unlock()
+
+            try? FileManager.default.removeItem(at: vault.fileURL)
+            SecretKey.allCases.forEach(deleteLegacyItem)
+            deleteMasterKeyItem()
+        }
+        SecretKey.allCases.forEach { UserDefaults.standard.removeObject(forKey: $0.rawValue) }
     }
 
-    /// Moves credentials written by a build that stored them in `UserDefaults` into the Keychain,
-    /// then deletes the plaintext copies. Safe to call on every launch: it only acts on a non-empty
-    /// defaults value, and only after the Keychain has nothing for that key.
-    ///
-    /// The defaults copy is removed only once the Keychain read-back confirms the value is there.
-    /// A migration that trusts its own write is a migration that can delete the only copy of a
-    /// credential when the write failed — the one failure mode this whole change must not have.
+    /// Moves credentials written by a build that stored them in `UserDefaults` into the vault, then
+    /// deletes the plaintext copies. Safe to call on every launch: it only acts on a non-empty
+    /// defaults value, and only after the vault reads the value back.
     static func migrateFromDefaultsIfNeeded() {
         guard isApp else { return }
         let defaults = UserDefaults.standard
@@ -112,76 +155,133 @@ enum Secrets {
                 defaults.removeObject(forKey: key.rawValue)
                 continue
             }
-            if (readFromKeychain(key).0 ?? "").isEmpty {
-                writeToKeychain(trimmed, for: key)
-                guard readFromKeychain(key).0 == trimmed else {
-                    AppLogger.error("Keychain migration for \(key.rawValue) did not read back; leaving the defaults copy in place")
+            if value(for: key).isEmpty {
+                set(trimmed, for: key)
+                guard value(for: key) == trimmed else {
+                    AppLogger.error(
+                        "Vault migration for \(key.rawValue) did not read back; leaving the defaults copy in place",
+                        logger: AppLogger.data
+                    )
                     continue
                 }
-                store(trimmed, for: key)
                 moved += 1
             }
             defaults.removeObject(forKey: key.rawValue)
         }
         if moved > 0 {
-            AppLogger.info("Moved \(moved) credential(s) from UserDefaults to the Keychain")
+            AppLogger.info("Moved \(moved) credential(s) from UserDefaults into the vault", logger: AppLogger.data)
         }
     }
 
     // MARK: - Environment
 
-    /// True only inside one of the app bundles. The dev bundle gets its own service, so the two
-    /// never read each other's items (which would prompt, because they are different requirements).
+    /// True only inside one of the app bundles. The dev bundle gets its own vault file, master key
+    /// item and legacy service, so the two never read each other's data.
     private static var bundleID: String? { Bundle.main.bundleIdentifier }
 
     private static var isApp: Bool {
         bundleID == "com.vara.mediatracker" || bundleID == "com.vara.mediatracker.dev"
     }
 
-    private static var service: String {
+    /// Master key item created by this build.
+    private static var masterKeyService: String {
+        "\(bundleID ?? "com.vara.mediatracker").vault"
+    }
+
+    /// Per-key items written by builds before the vault existed.
+    private static var legacyService: String {
         "\(bundleID ?? "com.vara.mediatracker").credentials"
     }
 
-    // MARK: - Cache
+    // MARK: - State
 
     private static let lock = NSLock()
     private nonisolated(unsafe) static var cache: [String: String] = [:]
-    /// Keys whose last read was refused rather than absent. An empty cached value is otherwise
-    /// ambiguous, and the two cases must never be treated alike: "absent" means a credential can be
-    /// created, "refused" means one exists that we were not allowed to see.
-    private nonisolated(unsafe) static var refused: Set<String> = []
+    private nonisolated(unsafe) static var didLoad = false
+    /// The vault file exists but its master key was missing or refused. Empty `cache` is
+    /// ambiguous on its own, and the two cases must never be treated alike: "empty" means a
+    /// credential can be created, "unreadable" means one exists that we were not allowed to see.
+    private nonisolated(unsafe) static var vaultUnreadable = false
 
-    private static func cached(_ key: SecretKey) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache[key.rawValue]
-    }
+    private static let keyLock = NSLock()
+    private nonisolated(unsafe) static var masterKeyCache: Data?
 
-    private static func store(_ value: String, for key: SecretKey) {
-        lock.lock()
-        cache[key.rawValue] = value
-        lock.unlock()
-    }
-
-    private static func markReadable(_ readable: Bool, for key: SecretKey) {
-        lock.lock()
-        if readable { refused.remove(key.rawValue) } else { refused.insert(key.rawValue) }
-        lock.unlock()
-    }
-
-    private static func wasRefused(_ key: SecretKey) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return refused.contains(key.rawValue)
-    }
+    /// All access goes through `lock`, which is what makes the shared vault safe.
+    private nonisolated(unsafe) static let vault: CredentialVault = {
+        let directory: URL
+        do {
+            directory = try StoreLocation.dataDirectory()
+        } catch {
+            AppLogger.error("Credential vault directory unavailable: \(error)", logger: AppLogger.data)
+            directory = FileManager.default.temporaryDirectory
+        }
+        return CredentialVault(
+            fileURL: directory.appendingPathComponent(CredentialVault.fileName),
+            keyProvider: { try keychainMasterKey(createIfMissing: $0) }
+        )
+    }()
 
     /// Test seam, matching `ImageCache.configureForTesting`. Empties the cache so the next read goes
     /// back to the store — used when a test changes the defaults a fixture was seeded with.
     static func invalidateCache() {
         lock.lock()
         cache.removeAll()
-        refused.removeAll()
+        didLoad = false
+        vaultUnreadable = false
         lock.unlock()
+    }
+
+    // MARK: - Load and migrate
+
+    private static func ensureLoadedLocked() {
+        guard !didLoad else { return }
+        didLoad = true
+
+        switch vault.load() {
+        case .loaded(let values):
+            cache = values
+
+        case .missing:
+            // No vault yet: this is where builds that stored credentials per key (Keychain) are
+            // folded in. Nothing is deleted unless the new file reads back identically.
+            switch readLegacyValues() {
+            case .none:
+                break
+            case .refused:
+                vaultUnreadable = true
+            case .values(let legacy):
+                do {
+                    if try vault.importIfMissing(legacy) {
+                        deleteLegacyItems()
+                        AppLogger.info(
+                            "Migrated \(legacy.count) credential(s) from the Keychain into the vault",
+                            logger: AppLogger.data
+                        )
+                    }
+                    cache = legacy
+                } catch {
+                    // The legacy items are still the only readable copy, so they stay.
+                    AppLogger.error(
+                        "Credential vault migration failed: \(error); legacy Keychain items left in place",
+                        logger: AppLogger.data
+                    )
+                    cache = legacy
+                }
+            }
+
+        case .unreadable:
+            vaultUnreadable = true
+        }
+    }
+
+    private static func persistLocked(_ values: [String: String]) {
+        do {
+            try vault.save(values)
+            cache = values
+            vaultUnreadable = false
+        } catch {
+            AppLogger.error("Failed to write the credential vault: \(error)", logger: AppLogger.data)
+        }
     }
 
     // MARK: - Signing identity
@@ -206,118 +306,220 @@ enum Secrets {
         return text as String
     }
 
-    /// Re-writes items that were created under a different signing identity.
+    /// Re-writes the master key item when this binary was signed by a different identity.
     ///
     /// A Keychain item's ACL names the designated requirement of the app that created it. If this
     /// binary has a different one — the item predates the stable certificate, or was written by an
-    /// ad-hoc build — every read asks for approval, and "Allow" only answers that one read. Reading
-    /// succeeds, so the ACL can be fixed by deleting and re-adding the item: the new item is created
-    /// by *this* binary, so "approved once" then means "approved from now on".
+    /// ad-hoc build — reading asks for approval, and "Allow" only answers that one read. The ACL is
+    /// repaired by deleting and re-adding the item under this binary, which requires the key bytes,
+    /// so this is a no-op (retried later) when the key cannot be read.
     ///
-    /// The values come from the cache, so this adds no reads and therefore no prompts. It is called
-    /// after the settings screen has read what it needs, which is the moment the user has already
-    /// granted access.
+    /// The vault file needs no changes: it is encrypted with the key, not with the ACL.
     static func adoptIfSigningIdentityChanged() {
         guard isApp, let current = currentSigningRequirement() else { return }
         let defaults = UserDefaults.standard
         guard defaults.string(forKey: identityDefaultsKey) != current else { return }
 
-        var rewritten = 0
-        var deferred = false
-        for key in SecretKey.allCases {
-            // A refused read is a credential we cannot see. Deleting it would destroy it, so it is
-            // left alone and the adoption is retried next time rather than marked done.
-            if wasRefused(key) {
-                deferred = true
-                continue
-            }
-            guard let value = cached(key) else { continue }
-            deleteFromKeychain(key)
-            writeToKeychain(value, for: key)
-            rewritten += 1
-        }
-        if deferred {
-            AppLogger.info("Some keychain items were unreadable; re-adoption will retry")
-        } else {
+        do {
+            let key = try keychainMasterKey(createIfMissing: false)
+            try rewriteMasterKeyItem(key)
             defaults.set(current, forKey: identityDefaultsKey)
-        }
-        if rewritten > 0 {
-            AppLogger.info("Re-adopted \(rewritten) keychain item(s) under the current signing identity")
+            AppLogger.info("Re-adopted the vault key under the current signing identity", logger: AppLogger.data)
+        } catch CredentialVault.VaultError.keyRefused {
+            AppLogger.info("Vault key access was refused; re-adoption will retry", logger: AppLogger.data)
+        } catch {
+            AppLogger.error("Vault key re-adoption failed: \(error)", logger: AppLogger.data)
         }
     }
 
-    /// Whether an item exists, answered from attributes only.
+    /// Whether this credential is present, answered without decrypting more than the vault
+    /// already needs to be.
     ///
-    /// Attributes do not require the data the ACL protects, so this never prompts. That matters:
-    /// callers use it to distinguish "no key yet" from "a key is there but could not be read", and
-    /// the second case must never be treated as the first.
+    /// Callers use this to distinguish "no credential yet" from "a vault exists but could not be
+    /// read"; the second must never be treated as the first. It must also answer for the *given
+    /// key* — a vault that exists but no longer contains the sync key means "not configured".
     static func hasItem(_ key: SecretKey) -> Bool {
         guard isApp else { return !value(for: key).isEmpty }
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue,
-            kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var out: CFTypeRef?
-        return SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess
+
+        lock.lock()
+        defer { lock.unlock() }
+        ensureLoadedLocked()
+
+        if vaultUnreadable {
+            // We cannot tell what is inside, but something is there. Reporting "absent" here
+            // would let callers overwrite a credential they simply could not read.
+            return vault.exists
+        }
+        if vault.exists {
+            return !(cache[key.rawValue] ?? "").isEmpty
+        }
+        return legacyItemExists(key)
     }
 
-    // MARK: - Keychain
+    // MARK: - Master key (Keychain)
 
-    private static func baseQuery(_ key: SecretKey) -> [String: Any] {
+    private static func keychainMasterKey(createIfMissing: Bool) throws -> Data {
+        keyLock.lock()
+        defer { keyLock.unlock() }
+
+        if let cached = masterKeyCache { return cached }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: masterKeyService,
+            kSecAttrAccount as String: "master-key",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+
+        switch status {
+        case errSecSuccess:
+            guard let data = item as? Data, data.count == CredentialVault.keyLength else {
+                throw CredentialVault.VaultError.invalidKey
+            }
+            masterKeyCache = data
+            return data
+
+        case errSecItemNotFound:
+            // Creating a key when the vault exists would make the existing ciphertext
+            // permanently undecryptable, so reads never generate one.
+            guard createIfMissing else { throw CredentialVault.VaultError.keyUnavailable }
+            let key = try randomMasterKey()
+            try addMasterKeyItem(key)
+            masterKeyCache = key
+            return key
+
+        case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
+            throw CredentialVault.VaultError.keyRefused
+
+        default:
+            AppLogger.error("Master key read failed: \(status)", logger: AppLogger.data)
+            throw CredentialVault.VaultError.keyUnavailable
+        }
+    }
+
+    private static func randomMasterKey() throws -> Data {
+        var bytes = Data(count: CredentialVault.keyLength)
+        let status = bytes.withUnsafeMutableBytes { buffer in
+            SecRandomCopyBytes(kSecRandomDefault, buffer.count, buffer.baseAddress!)
+        }
+        guard status == errSecSuccess else {
+            AppLogger.error("Master key generation failed: \(status)", logger: AppLogger.data)
+            throw CredentialVault.VaultError.keyUnavailable
+        }
+        return bytes
+    }
+
+    /// Caller holds `keyLock`.
+    private static func addMasterKeyItem(_ key: Data) throws {
+        let attributes: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: masterKeyService,
+            kSecAttrAccount as String: "master-key",
+            kSecValueData as String: key,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            AppLogger.error("Master key add failed: \(status)", logger: AppLogger.data)
+            throw CredentialVault.VaultError.keyUnavailable
+        }
+    }
+
+    private static func rewriteMasterKeyItem(_ key: Data) throws {
+        keyLock.lock()
+        defer { keyLock.unlock() }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: masterKeyService,
+            kSecAttrAccount as String: "master-key"
+        ]
+        let deleteStatus = SecItemDelete(query as CFDictionary)
+        guard deleteStatus == errSecSuccess || deleteStatus == errSecItemNotFound else {
+            throw CredentialVault.VaultError.writeFailed("master key delete failed: \(deleteStatus)")
+        }
+        try addMasterKeyItem(key)
+        masterKeyCache = key
+    }
+
+    private static func deleteMasterKeyItem() {
+        keyLock.lock()
+        defer { keyLock.unlock() }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: masterKeyService,
+            kSecAttrAccount as String: "master-key"
+        ]
+        let status = SecItemDelete(query as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            AppLogger.error("Master key delete failed: \(status)", logger: AppLogger.data)
+        }
+        masterKeyCache = nil
+    }
+
+    // MARK: - Legacy per-key Keychain items
+
+    private enum LegacyRead {
+        case none
+        case values([String: String])
+        /// At least one read was refused, so the set is untrustworthy and nothing may be deleted.
+        case refused
+    }
+
+    private static func legacyBaseQuery(_ key: SecretKey) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
+            kSecAttrService as String: legacyService,
             kSecAttrAccount as String: key.rawValue
         ]
     }
 
-    /// Returns the value (nil when absent) and how the lookup ended.
-    ///
-    /// The status matters: "no item" and "the user refused the prompt" both produce nil, but only
-    /// the first may be answered by creating a credential.
-    private static func readFromKeychain(_ key: SecretKey) -> (String?, OSStatus) {
-        var query = baseQuery(key)
-        query[kSecReturnData as String] = true
+    private static func readLegacyValues() -> LegacyRead {
+        var values: [String: String] = [:]
+        for key in SecretKey.allCases {
+            var query = legacyBaseQuery(key)
+            query[kSecReturnData as String] = true
+            query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+            var item: CFTypeRef?
+            let status = SecItemCopyMatching(query as CFDictionary, &item)
+            switch status {
+            case errSecSuccess:
+                if let data = item as? Data,
+                   let string = String(data: data, encoding: .utf8),
+                   !string.isEmpty {
+                    values[key.rawValue] = string
+                }
+            case errSecItemNotFound:
+                continue
+            case errSecInteractionNotAllowed, errSecAuthFailed, errSecUserCanceled:
+                return .refused
+            default:
+                AppLogger.error("Legacy keychain read for \(key.rawValue) failed: \(status)", logger: AppLogger.data)
+            }
+        }
+        return values.isEmpty ? .none : .values(values)
+    }
+
+    private static func legacyItemExists(_ key: SecretKey) -> Bool {
+        var query = legacyBaseQuery(key)
+        query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        guard status == errSecSuccess, let data = item as? Data else {
-            if status != errSecItemNotFound {
-                AppLogger.error("Keychain read for \(key.rawValue) failed: \(status)")
-            }
-            return (nil, status)
-        }
-        return (String(data: data, encoding: .utf8), status)
+        var out: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &out) == errSecSuccess
     }
 
-    /// Update-then-add rather than delete-then-add: a delete would briefly leave the credential
-    /// absent, and two writers racing (the settings screen and the sync engine generating a key)
-    /// could lose one of the values.
-    private static func writeToKeychain(_ value: String, for key: SecretKey) {
-        let data = Data(value.utf8)
-        let attributes: [String: Any] = [kSecValueData as String: data]
-        let status = SecItemUpdate(baseQuery(key) as CFDictionary, attributes as CFDictionary)
-
-        if status == errSecItemNotFound {
-            var add = baseQuery(key)
-            add[kSecValueData as String] = data
-            let addStatus = SecItemAdd(add as CFDictionary, nil)
-            if addStatus != errSecSuccess {
-                AppLogger.error("Keychain add for \(key.rawValue) failed: \(addStatus)")
-            }
-        } else if status != errSecSuccess {
-            AppLogger.error("Keychain update for \(key.rawValue) failed: \(status)")
-        }
+    private static func deleteLegacyItems() {
+        SecretKey.allCases.forEach(deleteLegacyItem)
     }
 
-    private static func deleteFromKeychain(_ key: SecretKey) {
-        let status = SecItemDelete(baseQuery(key) as CFDictionary)
+    private static func deleteLegacyItem(_ key: SecretKey) {
+        let status = SecItemDelete(legacyBaseQuery(key) as CFDictionary)
         if status != errSecSuccess && status != errSecItemNotFound {
-            AppLogger.error("Keychain delete for \(key.rawValue) failed: \(status)")
+            AppLogger.error("Legacy keychain delete for \(key.rawValue) failed: \(status)", logger: AppLogger.data)
         }
     }
 }

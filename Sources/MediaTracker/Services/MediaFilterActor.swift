@@ -500,17 +500,20 @@ actor MediaFilterActor {
         signposter.endInterval("searchPayloadBuild", payloadState)
 
         let scoringState = signposter.beginInterval("searchScoring")
-        // Try AND mode first
-        var scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
-            let evaluation = scorer.evaluate(payload: payload)
+        // Score each payload once, then apply the AND filter and — only if it
+        // yields nothing — the OR fallback to the same evaluations. The fallback
+        // used to re-run the full scorer over every candidate, doubling the cost
+        // of the (common) multi-token query that never matches all tokens.
+        let evaluations: [(MediaItem, SearchEvaluation)] = payloads.map { (item, payload) in
+            (item, scorer.evaluate(payload: payload))
+        }
+        var scored = evaluations.compactMap { (item, evaluation) -> (MediaItem, Int)? in
             guard evaluation.isEligibleForAllTokens else { return nil }
             return (item, evaluation.score)
         }
 
-        // Fall back to OR mode if AND produced nothing and query has multiple tokens
         if scored.isEmpty, tokens.count > 1 {
-            scored = payloads.compactMap { (item, payload) -> (MediaItem, Int)? in
-                let evaluation = scorer.evaluate(payload: payload)
+            scored = evaluations.compactMap { (item, evaluation) -> (MediaItem, Int)? in
                 guard evaluation.isEligibleForAnyToken else { return nil }
                 return (item, evaluation.score)
             }
