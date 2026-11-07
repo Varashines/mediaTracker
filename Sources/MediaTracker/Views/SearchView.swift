@@ -18,6 +18,43 @@ struct SearchView: View {
         nonmutating set { viewModel.filter.searchTypeFilter = newValue }
     }
 
+    private var isOnlineOnly: Bool {
+        viewModel.filter.searchSourceFilter == .online
+    }
+
+    private var hasQuery: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// The source toggle has nothing to filter on the Cast & Crew tab: its
+    /// filmography grid intentionally merges owned and unowned titles, marking
+    /// the owned ones with a library badge.
+    private var showsSourceFilter: Bool {
+        hasQuery && selectedType != .castCrew
+    }
+
+    /// Visible content for the loading skeleton — library hits do not count
+    /// while the "Online only" filter is hiding them.
+    private var hasVisibleLocalResults: Bool {
+        !isOnlineOnly && !searchVM.filteredLocalResults.isEmpty
+    }
+
+    private var hasVisibleWebResults: Bool {
+        !searchVM.allWebResults.isEmpty
+    }
+
+    private func setOnlineOnly(_ enabled: Bool) {
+        let target: SearchSourceFilter = enabled ? .online : .all
+        guard viewModel.filter.searchSourceFilter != target else { return }
+        if AppThemeCoordinator.isReducingVisualEffects {
+            viewModel.filter.searchSourceFilter = target
+        } else {
+            withAnimation(AppTheme.Animation.springSnappy) {
+                viewModel.filter.searchSourceFilter = target
+            }
+        }
+    }
+
     private var recentSearches: [String] {
         recentSearchesData.split(separator: "\n").map(String.init)
     }
@@ -146,6 +183,10 @@ struct SearchView: View {
                         .keyboardShortcut("3", modifiers: [.command, .option])
                     Button("") { viewModel.filter.searchTypeFilter = .castCrew }
                         .keyboardShortcut("4", modifiers: [.command, .option])
+                    if showsSourceFilter {
+                        Button("") { setOnlineOnly(!isOnlineOnly) }
+                            .keyboardShortcut("o", modifiers: [.command, .option])
+                    }
                 }
                 .opacity(0)
                 // Shortcut vehicles only — hide from VoiceOver and the hit-test path.
@@ -196,7 +237,91 @@ struct SearchView: View {
             .padding(.horizontal, AppTheme.Spacing.pageMargin)
             .padding(.vertical, 12)
 
+            if showsSourceFilter {
+                sourceFilterRow
+                    .padding(.horizontal, AppTheme.Spacing.pageMargin)
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
+            }
+
             Divider().padding(.horizontal, AppTheme.Spacing.pageMargin)
+        }
+        .animation(AppTheme.Animation.fade, value: showsSourceFilter)
+    }
+
+    /// Source toggle shown under the type pills once a query is active.
+    @ViewBuilder
+    private var sourceFilterRow: some View {
+        HStack(spacing: AppTheme.Spacing.small) {
+            Button {
+                setOnlineOnly(!isOnlineOnly)
+            } label: {
+                HStack(spacing: AppTheme.Spacing.micro) {
+                    Image(systemName: "globe")
+                        .font(.system(size: 11, weight: .semibold))
+
+                    Text("Online only")
+                        .font(isOnlineOnly ? AppTheme.Font.bodyBold : AppTheme.Font.body)
+                }
+                .foregroundStyle(isOnlineOnly ? AppTheme.Colors.accent : Color.secondary)
+                .padding(.horizontal, AppTheme.Spacing.compact)
+                .padding(.vertical, AppTheme.Spacing.mini)
+                .background {
+                    if isOnlineOnly {
+                        Capsule()
+                            .fill(AppTheme.Colors.accent.opacity(colorScheme == .dark ? 0.22 : 0.16))
+                            .overlay {
+                                Capsule()
+                                    .stroke(AppTheme.Colors.accent.opacity(0.35), lineWidth: 0.8)
+                            }
+                    } else {
+                        Capsule()
+                            .fill(AppTheme.Colors.cardFill(for: colorScheme))
+                    }
+                }
+                .overlay {
+                    if !isOnlineOnly {
+                        Capsule()
+                            .stroke(AppTheme.Colors.strokeDefault(for: colorScheme), lineWidth: 0.8)
+                    }
+                }
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .help(isOnlineOnly ? "Show library matches too" : "Hide titles already in your library")
+            .accessibilityLabel(isOnlineOnly ? "Show all search results" : "Show only online results")
+            .accessibilityAddTraits(isOnlineOnly ? .isSelected : [])
+
+            Spacer(minLength: 0)
+
+            // The hidden section must never feel like a vanished result: keep a
+            // visible way back to the library matches the filter is hiding.
+            if isOnlineOnly, hasVisibleWebResults, !searchVM.filteredLocalResults.isEmpty {
+                Button {
+                    setOnlineOnly(false)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "tray.full.fill")
+                            .font(.system(size: 10, weight: .semibold))
+
+                        Text("\(searchVM.filteredLocalResults.count) in library")
+                            .font(AppTheme.Font.caption)
+
+                        Text("Show")
+                            .font(AppTheme.Font.caption)
+                            .foregroundStyle(AppTheme.Colors.accent)
+                    }
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, AppTheme.Spacing.compact)
+                    .padding(.vertical, AppTheme.Spacing.mini)
+                    .background(Capsule().fill(AppTheme.Colors.surfaceSubtle(for: colorScheme)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Show \(searchVM.filteredLocalResults.count) library matches")
+                .transition(.opacity)
+            }
         }
     }
 
@@ -239,7 +364,7 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.pageMargin) {
                 if searchText.isEmpty {
                     recentSearchesLandingSection
-                } else if searchVM.isSearching && searchVM.filteredLocalResults.isEmpty && searchVM.allWebResults.isEmpty {
+                } else if searchVM.isSearching && !hasVisibleLocalResults && !hasVisibleWebResults {
                     // Container-level shimmer — one animation for all five rows.
                     VStack(spacing: AppTheme.Spacing.medium) {
                         ForEach(0..<5, id: \.self) { _ in
@@ -263,7 +388,9 @@ struct SearchView: View {
                     .padding(.vertical, AppTheme.Spacing.compact)
                     .shimmering()
                 } else {
-                    localResultsSection
+                    if !isOnlineOnly {
+                        localResultsSection
+                    }
                     webResultsSection
                 }
             }
@@ -272,6 +399,7 @@ struct SearchView: View {
                 // forced a complete recreate of every result cell on each
                 // filter tab switch.
                 .animation(AppTheme.Animation.easeInOut, value: selectedType)
+                .animation(AppTheme.Animation.easeInOut, value: isOnlineOnly)
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollIndicators(.hidden)
@@ -598,10 +726,63 @@ struct SearchView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, AppTheme.Spacing.large)
+            } else if selectedType != .castCrew, isOnlineOnly,
+                      searchVM.isOfflineResultsOnly || !searchVM.filteredLocalResults.isEmpty {
+                onlineOnlyEmptyState
             } else {
                 ContentUnavailableView.search(text: searchText)
             }
         }
+    }
+
+    /// Shown when "Online only" is on and the global section is empty. Separates
+    /// "TMDB has no match" from "you are offline", and never leaves the held-back
+    /// library matches unreachable.
+    @ViewBuilder
+    private var onlineOnlyEmptyState: some View {
+        let localCount = searchVM.filteredLocalResults.count
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        VStack(spacing: AppTheme.Spacing.small) {
+            Image(systemName: searchVM.isOfflineResultsOnly ? "wifi.slash" : "globe")
+                .font(.title2)
+                .foregroundStyle(.secondary.opacity(0.5))
+
+            Text(searchVM.isOfflineResultsOnly
+                 ? "Online results unavailable"
+                 : "No online results for “\(trimmed)”")
+                .font(AppTheme.Font.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            if localCount > 0 {
+                Text(localCount == 1
+                     ? "1 title in your library matches."
+                     : "\(localCount) titles in your library match.")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.tertiary)
+
+                Button {
+                    setOnlineOnly(false)
+                } label: {
+                    Text("Show library matches")
+                        .font(AppTheme.Font.bodyBold)
+                        .foregroundStyle(AppTheme.Colors.accent)
+                        .padding(.horizontal, AppTheme.Spacing.small)
+                        .padding(.vertical, AppTheme.Spacing.mini)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Turn off the Online only filter")
+            } else if searchVM.isOfflineResultsOnly {
+                Text("Reconnect to search TMDB.")
+                    .font(AppTheme.Font.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, AppTheme.Spacing.large)
+        .padding(.horizontal, AppTheme.Spacing.pageMargin)
     }
 }
 
