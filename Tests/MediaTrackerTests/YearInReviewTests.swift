@@ -424,6 +424,38 @@ final class YearInReviewTests: MTTestCase {
     }
 
     @MainActor
+    func testMovieShapedEventOnTVShowDoesNotCountAsWatchTime() async throws {
+        let fixture = try makeContainer()
+        let container = fixture.container
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let context = container.mainContext
+
+        let watchedAt = date(2026, 11, 8)
+        let show = makeItem(id: "tv_200", title: "Bogus Event Show", type: .tvShow, releaseDate: nil, state: "Completed")
+        show.lastStateChangeDate = watchedAt
+        context.insert(show)
+
+        // The cloud-sync bug wrote this: a movie-shaped event whose runtime is the
+        // show's cumulative runtime (98 × 22 minutes), all on one day.
+        let cycle = WatchCycle(mediaID: show.id, kind: .tvShow, startedAt: watchedAt, completedAt: watchedAt, state: .completed)
+        context.insert(cycle)
+        context.insert(WatchEvent(
+            cycleID: cycle.id,
+            mediaID: show.id,
+            watchedAt: watchedAt,
+            source: .imported,
+            runtimeMinutes: 2183,
+            deduplicationKey: "\(cycle.id.uuidString):movie:import"
+        ))
+        try context.save()
+
+        let review = await YearInReviewService(modelContainer: container).compute(year: 2026)
+
+        XCTAssertEqual(review.totalMinutes, 0)
+        XCTAssertEqual(review.activityByDay[Calendar.current.startOfDay(for: watchedAt)]?.minutes ?? 0, 0)
+    }
+
+    @MainActor
     func testPosterWallCandidatesIncludeLovedTitlesOnly() async throws {
         let fixture = try makeContainer()
         let container = fixture.container
