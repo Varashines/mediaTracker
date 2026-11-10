@@ -258,7 +258,12 @@ actor YearInReviewService {
         )
         eventDescriptor.propertiesToFetch = [\.mediaID, \.episodeID, \.watchedAt, \.runtimeMinutes, \.voidedAt]
         let events = (try? modelContext.fetch(eventDescriptor)) ?? []
+        // Any ledger row dedupes a movie completion.
         let eventMediaIDs = Set(events.map(\.mediaID))
+        // Only episode-level ledger rows dedupe the episode projection. A movie-shaped row
+        // (nil episodeID) on a TV show is legacy corruption from cloud sync; it must not
+        // suppress the show's real episode rows as well as being ignored below.
+        let episodeEventMediaIDs = Set(events.compactMap { $0.episodeID != nil ? $0.mediaID : nil })
 
         // 1. TV episodes watched within the year (drives per-day activity + TV "watched" ids).
         //    Season 0 (specials) are excluded, matching the app's progress logic.
@@ -276,7 +281,7 @@ actor YearInReviewService {
         var totalEpisodes = 0
         for episode in watchedEpisodes {
             guard let watchedDate = episode.watchedDate else { continue }
-            if let showID = episode.showID, eventMediaIDs.contains("tv_\(showID)") { continue }
+            if let showID = episode.showID, episodeEventMediaIDs.contains("tv_\(showID)") { continue }
             let day = calendar.startOfDay(for: watchedDate)
             var slot = activity[day] ?? .zero
             slot.episodes += 1
@@ -339,6 +344,9 @@ actor YearInReviewService {
         var eventTitleData: [Date: [String: (item: MediaItem, episodeCount: Int)]] = [:]
         for event in events {
             guard let item = itemByMediaID[event.mediaID] else { continue }
+            // A TV show must never carry a movie-shaped event. Ignore legacy rows so one
+            // bogus import cannot add the show's entire runtime to a single day.
+            if item.type == .tvShow, event.episodeID == nil { continue }
             let watchedAt = event.watchedAt
             guard watchedAt >= start && watchedAt < end else { continue }
             let day = calendar.startOfDay(for: watchedAt)

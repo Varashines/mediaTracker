@@ -823,7 +823,11 @@ actor CloudSyncService {
                     existing.dateAdded = d
                 }
                 existing.syncCachedProperties(dirty: .progress)
-                if remote.state == MediaState.completedRaw {
+                // Only movies get the movie-shaped event. A TV show's `cachedRuntime` is the
+                // cumulative runtime of every watched episode, so logging it here created one
+                // bogus "watch" of 36+ hours on the day the show was completed. Episode watches
+                // are recorded from `applyRemoteEpisodes` instead.
+                if remote.state == MediaState.completedRaw, existing.type == .movie {
                     // Same reason as episodes: log the watch so it appears in the history /
                     // "watched this year" (which is WatchEvent-driven).
                     WatchHistoryCoordinator.recordImportedMovie(

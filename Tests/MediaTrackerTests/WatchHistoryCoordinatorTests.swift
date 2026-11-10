@@ -243,6 +243,67 @@ final class WatchHistoryCoordinatorTests: MTTestCase {
         XCTAssertEqual(events[0].watchedAt, watchedAt)
     }
 
+    func testRecordImportedMovieIgnoresTVShow() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let show = MediaItem(id: "tv_42", title: "Show", overview: "", type: .tvShow)
+        context.insert(show)
+        try context.save()
+
+        WatchHistoryCoordinator.recordImportedMovie(
+            mediaID: "tv_42",
+            watchedAt: Date(timeIntervalSince1970: 500),
+            runtimeMinutes: 2183,
+            context: context
+        )
+        try context.save()
+
+        XCTAssertTrue(try context.fetch(FetchDescriptor<WatchEvent>()).isEmpty)
+    }
+
+    func testImportedMovieEventRepairVoidsMovieShapedTVEventsOnly() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let watchedAt = Date(timeIntervalSince1970: 500)
+        let show = MediaItem(id: "tv_314", title: "Show", overview: "", type: .tvShow)
+        let movie = MediaItem(id: "movie_314", title: "Movie", overview: "", type: .movie)
+        context.insert(show)
+        context.insert(movie)
+
+        let showCycle = WatchCycle(mediaID: show.id, kind: .tvShow, startedAt: watchedAt, state: .completed)
+        context.insert(showCycle)
+        let bad = WatchEvent(
+            cycleID: showCycle.id, mediaID: show.id, watchedAt: watchedAt,
+            source: .imported, runtimeMinutes: 2183, deduplicationKey: "bad"
+        )
+        let episodeEvent = WatchEvent(
+            cycleID: showCycle.id, mediaID: show.id, episodeID: "tv_314_1_1",
+            watchedAt: watchedAt, source: .automatic, runtimeMinutes: 22,
+            deduplicationKey: "episode"
+        )
+        context.insert(bad)
+        context.insert(episodeEvent)
+
+        let movieCycle = WatchCycle(mediaID: movie.id, kind: .movie, startedAt: watchedAt, state: .completed)
+        context.insert(movieCycle)
+        let realMovieEvent = WatchEvent(
+            cycleID: movieCycle.id, mediaID: movie.id, watchedAt: watchedAt,
+            source: .imported, runtimeMinutes: 100, deduplicationKey: "movie"
+        )
+        context.insert(realMovieEvent)
+        try context.save()
+
+        UserDefaults.standard.removeObject(forKey: UserDefaultsKeys.importedMovieEventRepairV1.rawValue)
+        await DatabaseMigrations.runImportedMovieEventRepairIfNeeded(container: container)
+
+        let events = try context.fetch(FetchDescriptor<WatchEvent>())
+        let byKey = Dictionary(uniqueKeysWithValues: events.map { ($0.deduplicationKey, $0) })
+        XCTAssertEqual(events.count, 3)
+        XCTAssertNotNil(byKey["bad"]?.voidedAt)
+        XCTAssertNil(byKey["episode"]?.voidedAt)
+        XCTAssertNil(byKey["movie"]?.voidedAt)
+    }
+
     func testUpdatingEpisodeDateUpdatesActiveHistoryEvent() throws {
         let container = try makeContainer()
         let context = container.mainContext
