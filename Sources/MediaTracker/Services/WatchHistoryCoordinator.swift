@@ -397,6 +397,14 @@ enum WatchHistoryCoordinator {
         runtimeMinutes: Int?,
         context: ModelContext
     ) {
+        // A movie-shaped event has `episodeID == nil`, so attaching one to a TV show would
+        // count the show's whole `cachedRuntime` as a single watch. Refuse it when the title
+        // is known to be a show. Missing items are left alone for backup imports that create
+        // the ledger before their metadata exists.
+        let mediaDescriptor = FetchDescriptor<MediaItem>(predicate: #Predicate { $0.id == mediaID })
+        if let item = try? context.fetch(mediaDescriptor).first, item.type != .movie {
+            return
+        }
         // A ledger change: the year review and derived stats cache history.
         MediaStateService.notifyLedgerChanged()
         let activeRaw = WatchCycleState.active.rawValue

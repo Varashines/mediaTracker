@@ -20,6 +20,7 @@ enum DatabaseMigrations {
         await runWatchHistoryBackfillIfNeeded(container: container)
         await runWatchHistoryRepairIfNeeded(container: container)
         await runWatchHistoryDedupIfNeeded(container: container)
+        await runImportedMovieEventRepairIfNeeded(container: container)
         await runFirstWatchedDateBackfillIfNeeded(container: container)
         await prunePersistentHistoryIfNeeded(container: container)
         await pruneSeasonCastToTop12IfNeeded(container: container)
@@ -777,6 +778,46 @@ enum DatabaseMigrations {
             await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
         } catch {
             AppLogger.error("Watch history dedup failed: \(error.localizedDescription)", logger: AppLogger.background)
+        }
+    }
+
+    /// Voids the result of a cloud-sync bug that logged a movie-shaped `WatchEvent`
+    /// (`episodeID == nil`) for a completed TV show. It wrote the show's cumulative
+    /// `cachedRuntime` onto the completion date — e.g. Abbott Elementary's 2,183
+    /// minutes showed as 36+ hours of watch time in one day in Year in Review.
+    ///
+    /// Voiding, not deleting: the ledger row is excluded from derived stats, and the
+    /// void is pushed to the cloud on the next sync. Deleting would let the remote
+    /// copy be pulled back. Episode-level events and real movie events are untouched.
+    static func runImportedMovieEventRepairIfNeeded(container: ModelContainer) async {
+        let versionKey = UserDefaultsKeys.importedMovieEventRepairV1.rawValue
+        guard UserDefaults.standard.integer(forKey: versionKey) < 1 else { return }
+
+        do {
+            let didRun = try await BackgroundOperationGate.shared.performHealIfIdle(label: "importedMovieEventRepair", container: container) {
+                let context = ModelContext(container)
+                let items = try context.fetch(FetchDescriptor<MediaItem>())
+                let tvShowIDs = Set(items.filter { $0.type == .tvShow }.map(\.id))
+                guard !tvShowIDs.isEmpty else { return }
+
+                let events = try context.fetch(FetchDescriptor<WatchEvent>())
+                let now = Date()
+                var voided = 0
+                for event in events where event.isActive {
+                    guard event.episodeID == nil, tvShowIDs.contains(event.mediaID) else { continue }
+                    event.voidedAt = now
+                    voided += 1
+                }
+                if voided > 0 {
+                    try context.save()
+                    AppLogger.info("🧹 Voided \(voided) movie-shaped events on TV shows", logger: AppLogger.background)
+                }
+            }
+            guard didRun else { return }
+            UserDefaults.standard.set(1, forKey: versionKey)
+            await MainActor.run { MediaStateService.shared.postMediaStateChanged() }
+        } catch {
+            AppLogger.error("Imported movie event repair failed: \(error.localizedDescription)", logger: AppLogger.background)
         }
     }
 
